@@ -9,6 +9,10 @@ Phase 3 업무형 UI 고도화를 실행/검증하기 위한 체크리스트다.
 - [ ] 상세 Drawer 버전 이력 표시 규칙 확정
 - [ ] timeline/history 정정/취소 이벤트 표현 규칙 확정
 - [ ] 정정공고/취소공고 테스트 시나리오 추가
+- [x] `bid_version_changes` 모델/테이블 초안 추가
+- [x] `sync_bid_change_history` CLI 초안 추가
+- [x] phase2 batch/admin batch에 change history sync 포함
+- [x] Drawer history/timeline에 change history 항목 연결
 
 ## 1. 범위 확정
 

@@ -29,6 +29,11 @@ class Bid(TimestampedModel, table=True):
     is_favorite: bool = Field(default=False, index=True)
     favorite_memo: Optional[str] = None
     source_api_name: Optional[str] = None
+    notice_version_type: Optional[str] = Field(default=None, index=True)
+    is_latest_version: bool = Field(default=False, index=True)
+    is_effective_version: bool = Field(default=True, index=True)
+    parent_bid_id: Optional[str] = Field(default=None, index=True)
+    version_reason: Optional[str] = None
     view_count: int = 0
     last_synced_at: Optional[datetime] = None
     last_changed_at: Optional[datetime] = None
@@ -42,6 +47,11 @@ class BidRead(SQLModel):
     demand_org: Optional[str] = None
     notice_org: Optional[str] = None
     status: str
+    notice_version_type: Optional[str] = None
+    is_latest_version: bool = False
+    is_effective_version: bool = True
+    parent_bid_id: Optional[str] = None
+    version_reason: Optional[str] = None
     posted_at: Optional[datetime] = None
     closed_at: Optional[datetime] = None
     budget_amount: Optional[int] = None

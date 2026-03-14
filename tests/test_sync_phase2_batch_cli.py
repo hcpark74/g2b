@@ -32,6 +32,11 @@ def test_phase2_batch_cli_records_completed_log(monkeypatch) -> None:
         ) -> list[dict[str, Any]]:
             return []
 
+        def fetch_bid_change_history(
+            self, operation_name: str, **_: Any
+        ) -> list[dict[str, Any]]:
+            return []
+
         def close(self) -> None:
             return None
 
@@ -85,6 +90,7 @@ def test_phase2_batch_cli_records_completed_log(monkeypatch) -> None:
     assert log.job_type == "phase2_batch_sync"
     assert log.status == "completed"
     assert "processed 1 bids" in log.message
+    assert "change_history_items=0" in log.message
     assert "reference_items=0" in log.message
 
 
@@ -110,6 +116,11 @@ def test_phase2_batch_cli_records_failure_log(monkeypatch) -> None:
 
     class StubDetailClient:
         def fetch_bid_detail_list(
+            self, operation_name: str, **_: Any
+        ) -> list[dict[str, Any]]:
+            return []
+
+        def fetch_bid_change_history(
             self, operation_name: str, **_: Any
         ) -> list[dict[str, Any]]:
             return []

@@ -5,6 +5,7 @@ from app.models.bid_license_limit import BidLicenseLimit
 from app.models.bid_participation_region import BidParticipationRegion
 from app.models.bid_purchase_item import BidPurchaseItem
 from app.models.bid_reference_info import BidReferenceInfo
+from app.models.bid_version_change import BidVersionChange
 from app.models.contract_process_integration import ContractProcessIntegration
 from app.models.common import (
     BID_STATUS_ARCHIVED,
@@ -33,6 +34,7 @@ __all__ = [
     "BidParticipationRegion",
     "BidPurchaseItem",
     "BidReferenceInfo",
+    "BidVersionChange",
     "ContractProcessIntegration",
     "BID_STATUS_ARCHIVED",
     "BID_STATUS_COLLECTED",

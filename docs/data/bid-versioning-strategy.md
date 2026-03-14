@@ -110,6 +110,10 @@ Phase 3 또는 후속 데이터 모델 보강 시 검토할 추가 필드:
 
 ## 9. Phase 3 / Phase 4 경계
 
+관련 문서:
+
+- `docs/data/g2b-bid-version-field-mapping.md`
+
 Phase 3에서 다루는 것:
 
 - 버전 해석 규칙

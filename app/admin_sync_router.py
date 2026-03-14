@@ -32,6 +32,7 @@ from app.db import engine
 from app.models import SyncJobLog
 from app.services import (
     G2BBidCrawlService,
+    G2BBidChangeHistoryService,
     G2BBidDetailEnrichmentService,
     G2BReferenceEnrichmentService,
     G2BBidPublicInfoSyncService,
@@ -440,6 +441,7 @@ def sync_phase2_batch(
         with Session(engine) as session:
             processed_bid_ids = list(payload.bid_ids or [])
             detail_items = 0
+            change_history_items = 0
             contract_items = 0
             crawl_attachments = 0
             reference_items = 0
@@ -459,6 +461,15 @@ def sync_phase2_batch(
 
             if payload.skip_detail and not processed_bid_ids:
                 raise ValueError("skip_detail=true 인 경우 bid_ids가 필요합니다")
+
+            if not payload.skip_change_history:
+                change_history_result = G2BBidChangeHistoryService(
+                    session=session, client=detail_client
+                ).sync_change_history(
+                    bid_ids=processed_bid_ids or None,
+                    num_of_rows=payload.rows,
+                )
+                change_history_items = change_history_result.fetched_item_count
 
             if not payload.skip_contract:
                 contract_result = G2BContractProcessService(
@@ -494,7 +505,7 @@ def sync_phase2_batch(
                 started_at=started_at,
                 message=(
                     f"selection_mode={payload.selection_mode} processed {len(processed_bid_ids)} bids "
-                    f"detail_items={detail_items} contract_items={contract_items} "
+                    f"detail_items={detail_items} change_history_items={change_history_items} contract_items={contract_items} "
                     f"crawl_attachments={crawl_attachments} reference_items={reference_items}"
                 ),
             )
@@ -507,6 +518,7 @@ def sync_phase2_batch(
                 finished_at=_format_datetime(log.finished_at),
                 processed_bid_ids=processed_bid_ids,
                 detail_items=detail_items,
+                change_history_items=change_history_items,
                 contract_items=contract_items,
                 crawl_attachments=crawl_attachments,
                 reference_items=reference_items,
@@ -521,19 +533,20 @@ def sync_phase2_batch(
                 started_at=started_at,
                 message=f"selection_mode={payload.selection_mode} {build_sync_failure_message(exc)}",
             )
-        return Phase2BatchSyncResponse(
-            job_type=log.job_type,
-            target=log.target,
-            status=_status_value(log.status),
-            message=log.message,
-            started_at=_format_datetime(log.started_at),
-            finished_at=_format_datetime(log.finished_at),
-            processed_bid_ids=[],
-            detail_items=0,
-            contract_items=0,
-            crawl_attachments=0,
-            reference_items=0,
-        )
+            return Phase2BatchSyncResponse(
+                job_type=log.job_type,
+                target=log.target,
+                status=_status_value(log.status),
+                message=log.message,
+                started_at=_format_datetime(log.started_at),
+                finished_at=_format_datetime(log.finished_at),
+                processed_bid_ids=[],
+                detail_items=0,
+                change_history_items=0,
+                contract_items=0,
+                crawl_attachments=0,
+                reference_items=0,
+            )
     finally:
         detail_client.close()
         contract_client.close()

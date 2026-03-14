@@ -66,11 +66,43 @@ CREATE INDEX IF NOT EXISTS ix_bids_is_favorite ON bids (is_favorite, updated_at 
 - `posted_at`, `closed_at`는 SQLite에서 `TEXT`로 저장하되 ISO 8601 포맷을 강제하는 것이 좋다.
 - `is_favorite`는 SQLite 특성상 `INTEGER(0/1)`로 둔다.
 
+Phase 3 버전 정규화 필드 초안:
+
+```sql
+ALTER TABLE bids ADD COLUMN notice_version_type TEXT;
+ALTER TABLE bids ADD COLUMN is_latest_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE bids ADD COLUMN is_effective_version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE bids ADD COLUMN parent_bid_id TEXT;
+ALTER TABLE bids ADD COLUMN version_reason TEXT;
+```
+
+권장 제약 및 인덱스:
+
+```sql
+CREATE INDEX IF NOT EXISTS ix_bids_bid_no_seq_changed ON bids (bid_no, bid_seq DESC, last_changed_at DESC);
+CREATE INDEX IF NOT EXISTS ix_bids_bid_no_latest_effective ON bids (bid_no, is_effective_version, bid_seq DESC);
+CREATE INDEX IF NOT EXISTS ix_bids_notice_version_type ON bids (notice_version_type);
+```
+
+버전 필드 설명:
+
+- `notice_version_type`: `original`, `revision`, `cancellation`, `unknown`
+- `is_latest_version`: 같은 `bid_no` 그룹에서 가장 최신 차수인지 여부
+- `is_effective_version`: 취소공고가 아닌 실제 검토 대상 차수인지 여부
+- `parent_bid_id`: 직전 차수 또는 원공고를 연결하는 참조값
+- `version_reason`: 정정/취소 사유 원문 또는 요약
+
 Phase 1 우선순위:
 
 - 1순위: `bid_id`, `status`, `posted_at`, `closed_at`, `is_favorite`
 - 2순위: `bid_no + bid_seq`, `notice_org`, `demand_org`
 - 3순위: `budget_amount` 및 후속 분석용 보조 인덱스
+
+Phase 3 버전 정규화 우선순위:
+
+- 1순위: `notice_version_type`, `is_effective_version`
+- 2순위: `is_latest_version`, `parent_bid_id`
+- 3순위: `version_reason`
 
 ### 3.2 `bid_details`
 
@@ -106,6 +138,42 @@ Phase 1 우선순위:
 
 - 1순위: `bid_id`
 - 2순위: `collected_at`, `detail_hash`
+
+### 3.2.a `bid_version_changes` (Phase 3 초안)
+
+- 목적: 변경이력 API의 전후값을 버전 단위로 저장
+
+```sql
+CREATE TABLE IF NOT EXISTS bid_version_changes (
+    change_id TEXT PRIMARY KEY,
+    bid_id TEXT NOT NULL,
+    bid_no TEXT NOT NULL,
+    bid_seq TEXT NOT NULL,
+    change_item_name TEXT NOT NULL,
+    before_value TEXT,
+    after_value TEXT,
+    changed_at TEXT,
+    source_api_name TEXT NOT NULL,
+    raw_data TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (bid_id) REFERENCES bids (bid_id) ON DELETE CASCADE
+);
+```
+
+권장 인덱스:
+
+```sql
+CREATE INDEX IF NOT EXISTS ix_bid_version_changes_bid_id_changed_at ON bid_version_changes (bid_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS ix_bid_version_changes_bid_no_seq ON bid_version_changes (bid_no, bid_seq);
+CREATE INDEX IF NOT EXISTS ix_bid_version_changes_item_name ON bid_version_changes (change_item_name);
+```
+
+설명:
+
+- `getBidPblancListInfoChgHstry*` 응답을 정규화 저장하는 테이블이다.
+- `history`와 `timeline`에 원문 변경 항목을 연결할 때 사용한다.
+- SQLite에서는 `raw_data`를 `TEXT(JSON string)`로 유지하고 PostgreSQL 전환 시 `JSONB`로 바꾸는 것이 적절하다.
 
 ### 3.3 `attachments`
 

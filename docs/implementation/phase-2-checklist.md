@@ -152,11 +152,12 @@ curl -X GET "http://127.0.0.1:8000/admin/operations?job_type=phase2_batch_sync" 
 - [x] 검증 DB: `sqlite:///./manual-phase2-batch.db`
 - [x] 선행 목록 적재: `python -m app.sync_bid_public_info --begin 202603120000 --end 202603132359 --operation getBidPblancListInfoServc --rows 20`
 - [x] 실제 실행: `python -m app.sync_phase2_batch --bid-id R26BK01387837-000`
-- [x] 배치 로그 확인: `selection_mode=targeted processed 1 bids detail_items=0 contract_items=1 crawl_attachments=1`
+- [x] 배치 로그 확인: `selection_mode=targeted processed 1 bids detail_items=0 change_history_items=0 contract_items=1 crawl_attachments=1`
 - [x] 적재 확인: `crawl_data`, `detail_hash`, `attachments=1`, `contract_process_integrations=1`, `timeline_stage_snapshots=3`
 - [x] `/operations`에서 `phase2_batch_sync` 확인
 - [x] `/partials/bids/R26BK01387837-000/drawer`에서 크롤링 첨부/본문 유지 확인
 - [x] `/results`에서 계약과정통합공개 결과 반영 확인
+- [x] Phase 2 배치에 `bid_change_history_sync` 단계 포함 반영
 
 ## 13. 2026-03-14 상세 보강/실패 처리 메모
 
@@ -176,10 +177,19 @@ curl -X GET "http://127.0.0.1:8000/admin/operations?job_type=phase2_batch_sync" 
 - [x] Playwright 재실행: `python -m app.sync_bid_crawl --bid-id R26BK01387837-000`
 - [x] Playwright 로그 재확인: `processed 1 bids, stored 1 attachments`
 - [x] Phase 2 배치 재실행: `python -m app.sync_phase2_batch --bid-id R26BK01387837-000`
-- [x] 배치 로그 재확인: `selection_mode=targeted processed 1 bids detail_items=0 contract_items=1 crawl_attachments=1 reference_items=0`
+- [x] 배치 로그 재확인: `selection_mode=targeted processed 1 bids detail_items=0 change_history_items=0 contract_items=1 crawl_attachments=1 reference_items=0`
 - [x] 적재 재확인: `contract_process_integrations=1`, `timeline_stage_snapshots=3`, `attachments_total=1`, `attachments_playwright=1`
 - [x] `bid_details.detail_hash` 및 `crawl_data.text_summary` 저장 재확인
 - [x] 크롤링 첨부 재확인: `bidCancelGuide.pdf`
 - [x] `TestClient` 기준 `/partials/bids/R26BK01387837-000/drawer` 응답 `200` 및 본문/첨부 반영 확인
 - [x] `TestClient` 기준 `/results` 응답 `200` 및 대상 공고 반영 확인
 - [x] `TestClient` 기준 `/operations` 응답 `200` 및 `phase2_batch_sync`, `contract_process_sync`, `bid_page_crawl` 로그 노출 확인
+
+## 15. 2026-03-14 변경이력 배치 연동 메모
+
+- [x] `python -m app.sync_bid_change_history --bid-id R26BK10000002-000` CLI 초안 추가
+- [x] `bid_version_changes` 모델/테이블 초안 추가
+- [x] `sync_phase2_batch`에 change history sync 단계 추가
+- [x] phase2 batch 로그에 `change_history_items` 카운트 반영
+- [x] admin phase2 batch API 응답에 `change_history_items` 반영
+- [x] `bid_version_changes` 기반 Drawer history/timeline 반영 테스트 추가

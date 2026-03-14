@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Protocol
 
 import httpx
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.clients import G2BBidPublicInfoClient
 from app.models import (
@@ -151,11 +151,18 @@ class G2BBidPublicInfoSyncService:
             item.get("asignBdgtAmt") or item.get("bdgtAmt") or item.get("presmptPrce")
         )
         bid.source_api_name = operation_name
+        bid.notice_version_type = self._notice_version_type(item)
+        bid.is_effective_version = bid.notice_version_type != "cancellation"
+        bid.version_reason = self._version_reason(item)
         bid.last_synced_at = datetime.now(timezone.utc)
         bid.last_changed_at = self._parse_datetime(
             item.get("chgDt")
         ) or self._parse_datetime(item.get("opengDt"))
         self.session.add(bid)
+        self.session.flush()
+
+        bid.parent_bid_id = self._parent_bid_id(bid)
+        self._refresh_version_group(bid.bid_no)
 
         bid_detail = self.session.get(BidDetail, bid_id)
         if bid_detail is None:
@@ -204,3 +211,69 @@ class G2BBidPublicInfoSyncService:
             or self._optional_str(item.get("bidNtceBssCdNm"))
             or BUSINESS_TYPE_BY_OPERATION.get(operation_name, "미분류")
         )
+
+    def _notice_version_type(self, item: dict[str, Any]) -> str:
+        if self._is_cancellation_notice(item):
+            return "cancellation"
+
+        bid_seq = normalize_bid_seq(item.get("bidNtceOrd"))
+        if bid_seq == "000":
+            return "original"
+        return "revision"
+
+    def _is_cancellation_notice(self, item: dict[str, Any]) -> bool:
+        for key in (
+            "bidNtceCnclYn",
+            "ntceCnclYn",
+            "cancelYn",
+            "cancYn",
+            "prtcptCnclYn",
+        ):
+            value = self._optional_str(item.get(key))
+            if value and value.upper() in {"Y", "TRUE", "1"}:
+                return True
+
+        for key in ("bidNtceNm", "ntceKindNm", "ntceNm"):
+            value = self._optional_str(item.get(key))
+            if value and "취소" in value:
+                return True
+
+        return False
+
+    def _version_reason(self, item: dict[str, Any]) -> str | None:
+        for key in (
+            "bidNtceCnclRsn",
+            "ntceRsn",
+            "chgRsn",
+            "rmrk",
+            "noticeVersionReason",
+        ):
+            value = self._optional_str(item.get(key))
+            if value:
+                return value
+        return None
+
+    def _parent_bid_id(self, bid: Bid) -> str | None:
+        siblings = list(
+            self.session.exec(select(Bid).where(Bid.bid_no == bid.bid_no)).all()
+        )
+        earlier = [item for item in siblings if item.bid_seq < bid.bid_seq]
+        if not earlier:
+            return None
+        earlier.sort(key=lambda item: item.bid_seq, reverse=True)
+        return earlier[0].bid_id
+
+    def _refresh_version_group(self, bid_no: str) -> None:
+        versions = list(
+            self.session.exec(select(Bid).where(Bid.bid_no == bid_no)).all()
+        )
+        if not versions:
+            return
+
+        versions.sort(key=lambda item: item.bid_seq, reverse=True)
+        latest_effective_seen = False
+        for index, version in enumerate(versions):
+            version.is_latest_version = index == 0
+            if version.is_effective_version and not latest_effective_seen:
+                latest_effective_seen = True
+            self.session.add(version)

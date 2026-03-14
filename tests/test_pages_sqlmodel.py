@@ -355,8 +355,10 @@ def test_sqlmodel_bids_page_prefers_latest_effective_version(
     assert response.status_code == 200
     assert ids["revision_bid_id"] in response.text
     assert ids["cancellation_bid_id"] not in response.text
-    assert "정정본" in response.text
-    assert "현재 보고 있는 공고는 최신 유효 공고입니다." in response.text
+    assert "정정공고" in response.text
+    assert (
+        "현재 보고 있는 공고는 검토 기준이 되는 최신 유효 차수입니다." in response.text
+    )
 
 
 def test_sqlmodel_drawer_shows_version_badges_and_history(
@@ -380,15 +382,23 @@ def test_sqlmodel_drawer_shows_version_badges_and_history(
         response = client.get(f"/partials/bids/{ids['cancellation_bid_id']}/drawer")
 
     assert response.status_code == 200
-    assert "취소본" in response.text
+    assert "취소공고" in response.text
     assert "버전 이력" in response.text
     assert ids["original_bid_id"] in response.text
     assert ids["revision_bid_id"] in response.text
-    assert "최신 유효 공고" in response.text
-    assert "공고버전" in response.text
-    assert "취소 등록" in response.text
+    assert "검토 기준" in response.text
+    assert "공고 차수 상태" in response.text
+    assert "취소 공고 게시" in response.text
+    assert "공고상태" in response.text
+    assert "정정공고" in response.text
+    assert 'class="selected-row fw-semibold"' in response.text
+    assert "최신 유효 차수 보기" in response.text
+    assert ids["revision_bid_id"] in response.text
     assert f'hx-get="/partials/bids/{ids["revision_bid_id"]}/drawer"' in response.text
-    assert "다른 버전을 클릭하면 해당 공고 상세로 이동합니다." in response.text
+    assert (
+        "최신 차수부터 정렬됩니다. 다른 행을 클릭하면 해당 차수 상세로 이동합니다."
+        in response.text
+    )
 
 
 def test_sqlmodel_timeline_partial_shows_revision_or_cancellation_event(
@@ -415,7 +425,8 @@ def test_sqlmodel_timeline_partial_shows_revision_or_cancellation_event(
 
     assert response.status_code == 200
     assert "공고 버전" in response.text
-    assert "취소 등록" in response.text
+    assert "취소 공고 게시" in response.text
+    assert "공고상태" in response.text
 
 
 def test_auto_backend_prefers_seeded_sqlmodel_data(

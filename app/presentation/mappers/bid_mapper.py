@@ -78,6 +78,8 @@ def build_bid_drawer_vm(raw_bid: dict[str, Any]) -> BidDrawerVM:
         version_variant=str(raw_bid.get("version_variant", "secondary")),
         version_summary=str(raw_bid.get("version_summary", "")),
         is_latest_effective=bool(raw_bid.get("is_latest_effective", False)),
+        latest_effective_bid_id=str(raw_bid.get("latest_effective_bid_id", "")),
+        latest_effective_title=str(raw_bid.get("latest_effective_title", "")),
         description_text=str(raw_bid.get("description_text", "")),
         detail_url=str(raw_bid.get("detail_url", "")),
         crawl_excerpt=str(raw_bid.get("crawl_excerpt", "")),

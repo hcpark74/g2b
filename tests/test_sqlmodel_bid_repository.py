@@ -379,9 +379,10 @@ def test_list_bids_defaults_to_latest_effective_version_per_bid_number() -> None
 
         assert [bid["bid_id"] for bid in bids] == [ids["revision_bid_id"]]
         assert bids[0]["title"] == "통합 유지보수 용역 정정공고"
-        assert bids[0]["version_label"] == "정정본"
+        assert bids[0]["version_label"] == "정정공고"
         assert (
-            bids[0]["version_summary"] == "현재 보고 있는 공고는 최신 유효 공고입니다."
+            bids[0]["version_summary"]
+            == "현재 보고 있는 공고는 검토 기준이 되는 최신 유효 차수입니다."
         )
     finally:
         session.close()
@@ -394,15 +395,18 @@ def test_get_bid_includes_version_history_metadata() -> None:
 
         bid = repository.get_bid(ids["cancellation_bid_id"])
 
-        assert bid["version_label"] == "취소본"
+        assert bid["version_label"] == "취소공고"
         assert bid["is_latest_effective"] is False
+        assert bid["latest_effective_bid_id"] == ids["revision_bid_id"]
         assert bid["version_history"][0]["bid_id"] == ids["cancellation_bid_id"]
         assert bid["version_history"][1]["is_latest_effective"] is True
         assert bid["version_history"][1]["bid_id"] == ids["revision_bid_id"]
         assert bid["timeline"][0]["stage"] == "공고 버전"
-        assert bid["timeline"][0]["meta"] == "취소 등록"
-        assert bid["history"][0]["item"] == "공고버전"
-        assert bid["history"][0]["after"] == "취소본"
+        assert bid["timeline"][0]["meta"] == "취소 공고 게시 · 공고상태"
+        assert bid["history"][0]["item"] == "공고 차수 상태"
+        assert bid["history"][0]["after"] == "취소공고"
+        assert bid["history"][1]["item"] == "공고상태"
+        assert bid["history"][1]["before"] == "정정공고"
     finally:
         session.close()
 

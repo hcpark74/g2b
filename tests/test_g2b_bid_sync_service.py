@@ -130,6 +130,66 @@ def test_sync_bid_notices_updates_existing_bid_without_duplicate_insert() -> Non
     assert bid.category == "물품"
 
 
+def test_sync_bid_notices_sets_version_normalization_fields() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+    client = FakeBidPublicInfoClient(
+        {
+            "getBidPblancListInfoServc": [
+                {
+                    "bidNtceNo": "R26BK00000777",
+                    "bidNtceOrd": "0",
+                    "bidNtceNm": "원공고",
+                },
+                {
+                    "bidNtceNo": "R26BK00000777",
+                    "bidNtceOrd": "1",
+                    "bidNtceNm": "정정공고",
+                    "chgRsn": "마감일 정정",
+                },
+                {
+                    "bidNtceNo": "R26BK00000777",
+                    "bidNtceOrd": "2",
+                    "bidNtceNm": "취소공고",
+                    "bidNtceCnclYn": "Y",
+                    "bidNtceCnclRsn": "사업 취소",
+                },
+            ]
+        }
+    )
+
+    with Session(engine) as session:
+        service = G2BBidPublicInfoSyncService(session=session, client=client)
+        service.sync_bid_notices(
+            inqry_bgn_dt="202603130000",
+            inqry_end_dt="202603132359",
+            operations=("getBidPblancListInfoServc",),
+        )
+
+    with Session(engine) as session:
+        original = session.get(Bid, "R26BK00000777-000")
+        revision = session.get(Bid, "R26BK00000777-001")
+        cancellation = session.get(Bid, "R26BK00000777-002")
+
+    assert original is not None
+    assert revision is not None
+    assert cancellation is not None
+    assert original.notice_version_type == "original"
+    assert original.parent_bid_id is None
+    assert original.is_latest_version is False
+    assert original.is_effective_version is True
+    assert revision.notice_version_type == "revision"
+    assert revision.parent_bid_id == "R26BK00000777-000"
+    assert revision.is_latest_version is False
+    assert revision.is_effective_version is True
+    assert revision.version_reason == "마감일 정정"
+    assert cancellation.notice_version_type == "cancellation"
+    assert cancellation.parent_bid_id == "R26BK00000777-001"
+    assert cancellation.is_latest_version is True
+    assert cancellation.is_effective_version is False
+    assert cancellation.version_reason == "사업 취소"
+
+
 def test_sync_cli_records_completed_operation_log(monkeypatch) -> None:
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)

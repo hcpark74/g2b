@@ -102,6 +102,8 @@ class BidDrawerVM(BaseModel):
     version_variant: str
     version_summary: str = ""
     is_latest_effective: bool = False
+    latest_effective_bid_id: str = ""
+    latest_effective_title: str = ""
     description_text: str = ""
     detail_url: str = ""
     crawl_excerpt: str = ""

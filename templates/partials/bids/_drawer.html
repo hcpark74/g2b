@@ -8,6 +8,18 @@
           {% with label=selected_bid.status, variant=selected_bid.status_variant %}{% include "partials/shared/_status_badge.html" %}{% endwith %}
           {% with label=selected_bid.version_label, variant=selected_bid.version_variant %}{% include "partials/shared/_status_badge.html" %}{% endwith %}
         </div>
+        {% if not selected_bid.is_latest_effective and selected_bid.latest_effective_bid_id %}
+          <div class="mt-2">
+            <button
+              class="btn btn-sm btn-outline-primary"
+              type="button"
+              hx-get="/partials/bids/{{ selected_bid.latest_effective_bid_id }}/drawer"
+              hx-target="#bid-drawer-container"
+              hx-swap="innerHTML"
+            >최신 유효 차수 보기</button>
+            <span class="small text-secondary ms-2">{{ selected_bid.latest_effective_bid_id }}</span>
+          </div>
+        {% endif %}
       {% endif %}
     </div>
     <button class="btn btn-sm btn-outline-secondary">닫기</button>

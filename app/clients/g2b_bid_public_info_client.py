@@ -73,6 +73,21 @@ class G2BBidPublicInfoClient:
             num_of_rows=num_of_rows,
         )
 
+    def fetch_bid_change_history(
+        self,
+        operation_name: str,
+        *,
+        bid_ntce_no: str,
+        page_no: int = 1,
+        num_of_rows: int = 100,
+    ) -> list[dict[str, Any]]:
+        return self.fetch_bid_detail_list(
+            operation_name,
+            bid_ntce_no=bid_ntce_no,
+            page_no=page_no,
+            num_of_rows=num_of_rows,
+        )
+
     def _get_service_key(self) -> str:
         service_key = (
             settings.g2b_api_service_key_decoded or settings.g2b_api_service_key_encoded

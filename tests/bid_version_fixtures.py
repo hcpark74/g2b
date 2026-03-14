@@ -2,7 +2,7 @@ from datetime import datetime
 
 from sqlmodel import Session
 
-from app.models import Bid, BidDetail
+from app.models import Bid, BidDetail, BidVersionChange
 
 
 def seed_bid_version_chain(
@@ -57,6 +57,32 @@ def seed_bid_version_chain(
             detail_url=f"https://example.com/bids/{revision_id}",
         )
     )
+    session.add(
+        BidVersionChange(
+            change_id=f"{revision_id}:001",
+            bid_id=revision_id,
+            bid_no=bid_no,
+            bid_seq="001",
+            change_item_name="공고명",
+            before_value="통합 유지보수 용역",
+            after_value="통합 유지보수 용역 정정공고",
+            changed_at="2026-03-12 10:30",
+            source_api_name="getBidPblancListInfoChgHstryServc",
+        )
+    )
+    session.add(
+        BidVersionChange(
+            change_id=f"{revision_id}:002",
+            bid_id=revision_id,
+            bid_no=bid_no,
+            bid_seq="001",
+            change_item_name="입찰마감일",
+            before_value="2026-03-18 14:00",
+            after_value="2026-03-20 14:00",
+            changed_at="2026-03-12 10:31",
+            source_api_name="getBidPblancListInfoChgHstryServc",
+        )
+    )
 
     session.add(
         Bid(
@@ -78,6 +104,19 @@ def seed_bid_version_chain(
             bid_id=cancellation_id,
             description_text="취소공고 본문",
             detail_url=f"https://example.com/bids/{cancellation_id}",
+        )
+    )
+    session.add(
+        BidVersionChange(
+            change_id=f"{cancellation_id}:001",
+            bid_id=cancellation_id,
+            bid_no=bid_no,
+            bid_seq="002",
+            change_item_name="공고상태",
+            before_value="정정공고",
+            after_value="취소공고",
+            changed_at="2026-03-13 08:45",
+            source_api_name="getBidPblancListInfoChgHstryServc",
         )
     )
     session.commit()

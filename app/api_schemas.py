@@ -103,6 +103,9 @@ class Phase2BatchSyncRequest(BaseModel):
     )
     rows: int = Field(default=100, ge=1, le=1000, description="API 페이지당 조회 건수")
     skip_detail: bool = Field(default=False, description="상세 보강 단계 생략")
+    skip_change_history: bool = Field(
+        default=False, description="변경이력 보강 단계 생략"
+    )
     skip_contract: bool = Field(default=False, description="계약과정통합공개 단계 생략")
     skip_crawl: bool = Field(default=False, description="Playwright 크롤링 단계 생략")
     skip_reference: bool = Field(
@@ -116,6 +119,7 @@ class Phase2BatchSyncRequest(BaseModel):
                 "recent_days": 7,
                 "rows": 100,
                 "skip_detail": False,
+                "skip_change_history": False,
                 "skip_contract": False,
                 "skip_crawl": False,
                 "skip_reference": False,
@@ -278,6 +282,7 @@ class BidCrawlResponse(SyncExecutionResponse):
 class Phase2BatchSyncResponse(SyncExecutionResponse):
     processed_bid_ids: list[str]
     detail_items: int
+    change_history_items: int
     contract_items: int
     crawl_attachments: int
     reference_items: int
@@ -288,11 +293,12 @@ class Phase2BatchSyncResponse(SyncExecutionResponse):
                 "job_type": "phase2_batch_sync",
                 "target": "R26BK00001004-000",
                 "status": "completed",
-                "message": "selection_mode=targeted processed 1 bids detail_items=2 contract_items=1 crawl_attachments=3 reference_items=2",
+                "message": "selection_mode=targeted processed 1 bids detail_items=2 change_history_items=1 contract_items=1 crawl_attachments=3 reference_items=2",
                 "started_at": "2026-03-14 06:18",
                 "finished_at": "2026-03-14 06:21",
                 "processed_bid_ids": ["R26BK00001004-000"],
                 "detail_items": 2,
+                "change_history_items": 1,
                 "contract_items": 1,
                 "crawl_attachments": 3,
                 "reference_items": 2,

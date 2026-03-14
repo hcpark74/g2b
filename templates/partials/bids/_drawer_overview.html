@@ -29,14 +29,14 @@
         <thead>
           <tr>
             <th>차수</th>
-            <th>구분</th>
+            <th>버전 상태</th>
             <th>공고번호</th>
-            <th>게시일시</th>
+            <th>공고 게시</th>
           </tr>
         </thead>
         <tbody>
           {% for item in selected_bid.version_history %}
-            <tr{% if not item.is_current %} hx-get="/partials/bids/{{ item.bid_id }}/drawer" hx-target="#bid-drawer-container" hx-swap="innerHTML" style="cursor: pointer;"{% endif %}>
+            <tr class="{% if item.is_current %}selected-row fw-semibold{% endif %}"{% if not item.is_current %} hx-get="/partials/bids/{{ item.bid_id }}/drawer" hx-target="#bid-drawer-container" hx-swap="innerHTML" style="cursor: pointer;"{% endif %}>
               <td>{{ item.bid_seq }}</td>
               <td>
                 {% set label = item.version_label %}
@@ -46,7 +46,7 @@
               <td>
                 {{ item.bid_id }}
                 {% if item.is_current %}<span class="small text-secondary">(현재)</span>{% endif %}
-                {% if item.is_latest_effective %}<span class="small text-success"> 최신 유효 공고</span>{% endif %}
+                {% if item.is_latest_effective %}<span class="small text-success"> 검토 기준</span>{% endif %}
               </td>
               <td>{{ item.posted_at }}</td>
             </tr>
@@ -54,7 +54,7 @@
         </tbody>
       </table>
     </div>
-    <div class="small text-secondary mt-2">다른 버전을 클릭하면 해당 공고 상세로 이동합니다.</div>
+    <div class="small text-secondary mt-2">최신 차수부터 정렬됩니다. 다른 행을 클릭하면 해당 차수 상세로 이동합니다.</div>
   </div>
 {% endif %}
 

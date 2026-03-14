@@ -12,6 +12,7 @@ from app.db import engine, init_db
 from app.models import SyncJobLog
 from app.services import (
     G2BBidCrawlService,
+    G2BBidChangeHistoryService,
     G2BBidDetailEnrichmentService,
     G2BReferenceEnrichmentService,
     G2BContractProcessService,
@@ -45,6 +46,7 @@ def main() -> None:
         help="Recent-change window used by targeted selection.",
     )
     parser.add_argument("--skip-detail", action="store_true")
+    parser.add_argument("--skip-change-history", action="store_true")
     parser.add_argument("--skip-contract", action="store_true")
     parser.add_argument("--skip-crawl", action="store_true")
     parser.add_argument("--skip-reference", action="store_true")
@@ -64,6 +66,7 @@ def main() -> None:
             processed_bid_ids = list(selected_bid_ids)
             detail_processed = 0
             detail_items = 0
+            change_history_items = 0
             contract_items = 0
             crawl_attachments = 0
             reference_items = 0
@@ -87,6 +90,16 @@ def main() -> None:
                 raise ValueError(
                     "--skip-detail 사용 시에는 최소 하나 이상의 --bid-id가 필요합니다"
                 )
+
+            if not args.skip_change_history:
+                change_history_result = G2BBidChangeHistoryService(
+                    session=session,
+                    client=detail_client,
+                ).sync_change_history(
+                    bid_ids=processed_bid_ids or None,
+                    num_of_rows=args.rows,
+                )
+                change_history_items = change_history_result.fetched_item_count
 
             if not args.skip_contract:
                 contract_result = G2BContractProcessService(
@@ -128,6 +141,7 @@ def main() -> None:
                         f"selection_mode={args.selection_mode} "
                         f"processed {len(processed_bid_ids)} bids "
                         f"detail_items={detail_items} "
+                        f"change_history_items={change_history_items} "
                         f"contract_items={contract_items} "
                         f"crawl_attachments={crawl_attachments} "
                         f"reference_items={reference_items}"
@@ -161,6 +175,7 @@ def main() -> None:
 
     print(f"processed bids: {len(processed_bid_ids)}")
     print(f"detail items: {detail_items}")
+    print(f"change history items: {change_history_items}")
     print(f"contract items: {contract_items}")
     print(f"crawl attachments: {crawl_attachments}")
     print(f"reference items: {reference_items}")

@@ -383,6 +383,17 @@ def test_admin_sync_phase2_batch_returns_success_response(
 
             return Result()
 
+    class StubChangeHistoryService:
+        def __init__(self, session, client) -> None:
+            self.session = session
+            self.client = client
+
+        def sync_change_history(self, **_: Any):
+            class Result:
+                fetched_item_count = 2
+
+            return Result()
+
     class StubCrawlService:
         def __init__(self, session, crawler) -> None:
             self.session = session
@@ -421,6 +432,9 @@ def test_admin_sync_phase2_batch_returns_success_response(
     monkeypatch.setattr(
         "app.admin_sync_router.G2BContractProcessService", StubContractService
     )
+    monkeypatch.setattr(
+        "app.admin_sync_router.G2BBidChangeHistoryService", StubChangeHistoryService
+    )
     monkeypatch.setattr("app.admin_sync_router.G2BBidCrawlService", StubCrawlService)
     monkeypatch.setattr(
         "app.admin_sync_router.G2BReferenceEnrichmentService", StubReferenceService
@@ -443,6 +457,7 @@ def test_admin_sync_phase2_batch_returns_success_response(
     assert payload["status"] == "completed"
     assert payload["processed_bid_ids"] == ["R26BK00001004-000"]
     assert payload["detail_items"] == 2
+    assert payload["change_history_items"] == 2
     assert payload["contract_items"] == 1
     assert payload["crawl_attachments"] == 3
     assert payload["reference_items"] == 4

@@ -6,6 +6,13 @@ from app.config import settings
 
 
 LEGACY_SQLITE_COLUMN_MIGRATIONS: dict[str, dict[str, str]] = {
+    "bids": {
+        "notice_version_type": "TEXT",
+        "is_latest_version": "INTEGER NOT NULL DEFAULT 0",
+        "is_effective_version": "INTEGER NOT NULL DEFAULT 1",
+        "parent_bid_id": "TEXT",
+        "version_reason": "TEXT",
+    },
     "bid_details": {
         "detail_url": "TEXT",
         "detail_hash": "TEXT",

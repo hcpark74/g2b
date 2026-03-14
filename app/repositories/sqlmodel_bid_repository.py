@@ -15,6 +15,7 @@ from app.models.bid_license_limit import BidLicenseLimit
 from app.models.bid_participation_region import BidParticipationRegion
 from app.models.bid_purchase_item import BidPurchaseItem
 from app.models.bid_reference_info import BidReferenceInfo
+from app.models.bid_version_change import BidVersionChange
 from app.models.contract_process_integration import ContractProcessIntegration
 from app.models.timeline_stage_snapshot import TimelineStageSnapshot
 from app.repositories.bid_repository import BidListPage, BidRepository
@@ -321,29 +322,29 @@ class SqlModelBidRepository(BidRepository):
 
     def _version_label(self, bid: Bid, versions: list[Bid]) -> str:
         if self._is_non_effective_version(bid):
-            return "취소본"
+            return "취소공고"
         if len(versions) == 1:
-            return "원공고"
+            return "최초공고"
         if bid.bid_seq == min((item.bid_seq for item in versions), default=bid.bid_seq):
-            return "원공고"
-        return "정정본"
+            return "최초공고"
+        return "정정공고"
 
     def _version_variant(self, bid: Bid, versions: list[Bid]) -> str:
         label = self._version_label(bid, versions)
-        if label == "취소본":
+        if label == "취소공고":
             return "danger"
         if self._is_latest_effective_version(bid, versions):
             return "success"
-        if label == "정정본":
+        if label == "정정공고":
             return "warning"
         return "secondary"
 
     def _version_summary(self, bid: Bid, versions: list[Bid]) -> str:
         if self._is_non_effective_version(bid):
-            return "현재 보고 있는 공고는 취소된 버전입니다."
+            return "현재 보고 있는 공고는 취소공고입니다. 검토 시 최신 유효 차수를 함께 확인하세요."
         if self._is_latest_effective_version(bid, versions):
-            return "현재 보고 있는 공고는 최신 유효 공고입니다."
-        return "현재 보고 있는 공고는 과거 버전입니다."
+            return "현재 보고 있는 공고는 검토 기준이 되는 최신 유효 차수입니다."
+        return "현재 보고 있는 공고는 이전 차수입니다. 최신 유효 차수와 변경 내용을 비교해 확인하세요."
 
     def _parse_filter_datetime(self, value: str | None) -> datetime | None:
         if not value:
@@ -470,6 +471,17 @@ class SqlModelBidRepository(BidRepository):
             ).all()
         )
 
+    def _list_bid_version_changes(self, bid_id: str) -> list[BidVersionChange]:
+        return list(
+            self.session.exec(
+                select(BidVersionChange)
+                .where(BidVersionChange.bid_id == bid_id)
+                .order_by(
+                    BidVersionChange.changed_at.desc(), BidVersionChange.change_id.asc()
+                )
+            ).all()
+        )
+
     def _version_history_payload(
         self, bid: Bid, versions: list[Bid]
     ) -> list[dict[str, str | bool]]:
@@ -491,6 +503,12 @@ class SqlModelBidRepository(BidRepository):
             for item in versions
         ]
 
+    def _latest_effective_version(self, versions: list[Bid]) -> Bid | None:
+        return next(
+            (item for item in versions if not self._is_non_effective_version(item)),
+            None,
+        )
+
     def _to_bid_payload(self, bid: Bid) -> dict[str, Any]:
         bid_detail = self._get_bid_detail(bid.bid_id)
         crawl_payload = self._crawl_payload(bid_detail)
@@ -501,6 +519,7 @@ class SqlModelBidRepository(BidRepository):
         reference_infos = self._list_reference_infos(bid.bid_id)
         timeline_snapshots = self._list_timeline_snapshots(bid.bid_id)
         contract_integrations = self._list_contract_integrations(bid.bid_id)
+        version_changes = self._list_bid_version_changes(bid.bid_id)
         versions = self._list_bid_versions(bid.bid_no)
         status_label = self._status_label(bid.status)
         progress_label = self._progress_label(bid)
@@ -508,6 +527,7 @@ class SqlModelBidRepository(BidRepository):
         version_label = self._version_label(bid, versions)
         version_variant = self._version_variant(bid, versions)
         version_summary = self._version_summary(bid, versions)
+        latest_effective = self._latest_effective_version(versions)
 
         return {
             "bid_id": bid.bid_id,
@@ -523,6 +543,12 @@ class SqlModelBidRepository(BidRepository):
             "version_variant": version_variant,
             "version_summary": version_summary,
             "is_latest_effective": self._is_latest_effective_version(bid, versions),
+            "latest_effective_bid_id": (
+                latest_effective.bid_id if latest_effective is not None else ""
+            ),
+            "latest_effective_title": (
+                latest_effective.title if latest_effective is not None else ""
+            ),
             "business_type": business_type,
             "domain_type": "내자",
             "notice_type": self._notice_type(bid),
@@ -600,8 +626,12 @@ class SqlModelBidRepository(BidRepository):
                 }
                 for attachment in attachments
             ],
-            "timeline": self._timeline_payload(bid, timeline_snapshots, progress_label),
-            "history": self._history_payload(bid, contract_integrations),
+            "timeline": self._timeline_payload(
+                bid, timeline_snapshots, progress_label, version_changes
+            ),
+            "history": self._history_payload(
+                bid, contract_integrations, version_changes
+            ),
             "version_history": self._version_history_payload(bid, versions),
         }
 
@@ -776,8 +806,9 @@ class SqlModelBidRepository(BidRepository):
         bid: Bid,
         timeline_snapshots: list[TimelineStageSnapshot],
         progress_label: str,
+        version_changes: list[BidVersionChange],
     ) -> list[dict[str, str]]:
-        version_events = self._version_timeline_events(bid)
+        version_events = self._version_timeline_events(bid, version_changes)
         if timeline_snapshots:
             return version_events + [
                 {
@@ -813,24 +844,34 @@ class SqlModelBidRepository(BidRepository):
             },
         ]
 
-    def _version_timeline_events(self, bid: Bid) -> list[dict[str, str]]:
+    def _version_timeline_events(
+        self, bid: Bid, version_changes: list[BidVersionChange]
+    ) -> list[dict[str, str]]:
         label = self._version_label(bid, self._list_bid_versions(bid.bid_no))
-        if label == "원공고":
+        if label == "최초공고":
             return []
+        change_summary = self._version_change_summary(version_changes)
         return [
             {
                 "stage": "공고 버전",
-                "status": "확인 필요" if label == "취소본" else "완료",
+                "status": "확인 필요" if label == "취소공고" else "완료",
                 "number": bid.bid_id,
                 "date": self._format_datetime(bid.posted_at),
-                "meta": "취소 등록" if label == "취소본" else "정정 등록",
+                "meta": (
+                    f"{'취소 공고 게시' if label == '취소공고' else '정정 공고 게시'}"
+                    + (f" · {change_summary}" if change_summary else "")
+                ),
             }
         ]
 
     def _history_payload(
-        self, bid: Bid, contract_integrations: list[ContractProcessIntegration]
+        self,
+        bid: Bid,
+        contract_integrations: list[ContractProcessIntegration],
+        version_changes: list[BidVersionChange],
     ) -> list[dict[str, str]]:
         history: list[dict[str, str]] = self._version_history_events(bid)
+        history.extend(self._version_change_history_items(version_changes))
 
         for integration in contract_integrations:
             changed_at = integration.collected_at or self._format_datetime(
@@ -900,13 +941,38 @@ class SqlModelBidRepository(BidRepository):
     def _version_history_events(self, bid: Bid) -> list[dict[str, str]]:
         versions = self._list_bid_versions(bid.bid_no)
         label = self._version_label(bid, versions)
-        if label == "원공고":
+        if label == "최초공고":
             return []
         return [
             {
                 "changed_at": self._format_datetime(bid.posted_at),
-                "item": "공고버전",
-                "before": "원공고" if label == "정정본" else "정정본",
+                "item": "공고 차수 상태",
+                "before": "최초공고" if label == "정정공고" else "정정공고",
                 "after": label,
             }
         ]
+
+    def _version_change_history_items(
+        self, version_changes: list[BidVersionChange]
+    ) -> list[dict[str, str]]:
+        return [
+            {
+                "changed_at": self._format_datetime(change.changed_at),
+                "item": change.change_item_name,
+                "before": change.before_value or "-",
+                "after": change.after_value or "-",
+            }
+            for change in version_changes
+        ]
+
+    def _version_change_summary(self, version_changes: list[BidVersionChange]) -> str:
+        if not version_changes:
+            return ""
+        names = [
+            change.change_item_name
+            for change in version_changes[:3]
+            if change.change_item_name
+        ]
+        if not names:
+            return ""
+        return ", ".join(names)

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.models import Bid, BidDetail, ContractProcessIntegration, SyncJobLog
+from tests.bid_version_fixtures import seed_bid_version_chain
 
 
 def _reload_module(name: str):
@@ -306,6 +307,117 @@ def test_sqlmodel_timeline_partial_renders(sqlmodel_client: TestClient) -> None:
     assert "R26BK00000001-000" in response.text
 
 
+def test_sqlmodel_drawer_renders_version_fixture_bid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "version-drawer.db"
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("BID_DATA_BACKEND", "sqlmodel")
+    monkeypatch.setenv("DEBUG", "false")
+
+    db_module = _reload_module("app.db")
+    _reload_module("app.models")
+    db_module.init_db()
+
+    with Session(db_module.engine) as session:
+        ids = seed_bid_version_chain(session, bid_no="R26BK90000123")
+
+    main_module = _reload_module("app.main")
+    with TestClient(main_module.app) as client:
+        response = client.get(f"/partials/bids/{ids['cancellation_bid_id']}/drawer")
+
+    assert response.status_code == 200
+    assert ids["cancellation_bid_id"] in response.text
+    assert "통합 유지보수 용역 취소공고" in response.text
+
+
+def test_sqlmodel_bids_page_prefers_latest_effective_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "version-list.db"
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("BID_DATA_BACKEND", "sqlmodel")
+    monkeypatch.setenv("DEBUG", "false")
+
+    db_module = _reload_module("app.db")
+    _reload_module("app.models")
+    db_module.init_db()
+
+    with Session(db_module.engine) as session:
+        ids = seed_bid_version_chain(session, bid_no="R26BK90000999")
+
+    main_module = _reload_module("app.main")
+    with TestClient(main_module.app) as client:
+        response = client.get("/bids")
+
+    assert response.status_code == 200
+    assert ids["revision_bid_id"] in response.text
+    assert ids["cancellation_bid_id"] not in response.text
+    assert "정정본" in response.text
+    assert "현재 보고 있는 공고는 최신 유효 공고입니다." in response.text
+
+
+def test_sqlmodel_drawer_shows_version_badges_and_history(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "version-drawer-history.db"
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("BID_DATA_BACKEND", "sqlmodel")
+    monkeypatch.setenv("DEBUG", "false")
+
+    db_module = _reload_module("app.db")
+    _reload_module("app.models")
+    db_module.init_db()
+
+    with Session(db_module.engine) as session:
+        ids = seed_bid_version_chain(session, bid_no="R26BK90000888")
+
+    main_module = _reload_module("app.main")
+    with TestClient(main_module.app) as client:
+        response = client.get(f"/partials/bids/{ids['cancellation_bid_id']}/drawer")
+
+    assert response.status_code == 200
+    assert "취소본" in response.text
+    assert "버전 이력" in response.text
+    assert ids["original_bid_id"] in response.text
+    assert ids["revision_bid_id"] in response.text
+    assert "최신 유효 공고" in response.text
+    assert "공고버전" in response.text
+    assert "취소 등록" in response.text
+    assert f'hx-get="/partials/bids/{ids["revision_bid_id"]}/drawer"' in response.text
+    assert "다른 버전을 클릭하면 해당 공고 상세로 이동합니다." in response.text
+
+
+def test_sqlmodel_timeline_partial_shows_revision_or_cancellation_event(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "version-timeline.db"
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("BID_DATA_BACKEND", "sqlmodel")
+    monkeypatch.setenv("DEBUG", "false")
+
+    db_module = _reload_module("app.db")
+    _reload_module("app.models")
+    db_module.init_db()
+
+    with Session(db_module.engine) as session:
+        ids = seed_bid_version_chain(session, bid_no="R26BK90000777")
+
+    main_module = _reload_module("app.main")
+    with TestClient(main_module.app) as client:
+        response = client.get(
+            f"/partials/bids/{ids['cancellation_bid_id']}/timeline-inline"
+        )
+
+    assert response.status_code == 200
+    assert "공고 버전" in response.text
+    assert "취소 등록" in response.text
+
+
 def test_auto_backend_prefers_seeded_sqlmodel_data(
     auto_backend_client: TestClient,
 ) -> None:
@@ -340,13 +452,51 @@ def test_sqlmodel_bids_page_filters_favorites_only(sqlmodel_client: TestClient) 
 
 
 def test_bids_filter_bar_preserves_query_params(sqlmodel_client: TestClient) -> None:
-    response = sqlmodel_client.get("/bids?q=구급소모품&status=collected&favorites=1")
+    response = sqlmodel_client.get(
+        "/bids?q=구급소모품&status=collected&favorites=1&include_versions=1"
+    )
 
     assert response.status_code == 200
     assert 'value="구급소모품"' in response.text
     assert '<option value="collected" selected>' in response.text
     assert 'id="favorites-only"' in response.text
+    assert 'id="include-versions"' in response.text
     assert "checked" in response.text
+
+
+def test_favorites_page_hides_version_filter(sqlmodel_client: TestClient) -> None:
+    response = sqlmodel_client.get("/favorites")
+
+    assert response.status_code == 200
+    assert 'id="favorites-only"' not in response.text
+    assert 'id="include-versions"' not in response.text
+    assert "현재는 키워드, 상태 필터를 지원합니다." in response.text
+
+
+def test_sqlmodel_bids_page_can_include_historical_versions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "version-filter.db"
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("BID_DATA_BACKEND", "sqlmodel")
+    monkeypatch.setenv("DEBUG", "false")
+
+    db_module = _reload_module("app.db")
+    _reload_module("app.models")
+    db_module.init_db()
+
+    with Session(db_module.engine) as session:
+        ids = seed_bid_version_chain(session, bid_no="R26BK90000666")
+
+    main_module = _reload_module("app.main")
+    with TestClient(main_module.app) as client:
+        response = client.get("/bids?include_versions=1")
+
+    assert response.status_code == 200
+    assert ids["original_bid_id"] in response.text
+    assert ids["revision_bid_id"] in response.text
+    assert ids["cancellation_bid_id"] in response.text
 
 
 def test_operations_page_prefers_db_logs(operations_client: TestClient) -> None:

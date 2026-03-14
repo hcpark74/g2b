@@ -40,6 +40,16 @@ class BidHistoryItemVM(BaseModel):
     after: str
 
 
+class BidVersionItemVM(BaseModel):
+    bid_id: str
+    bid_seq: str
+    title: str
+    version_label: str
+    is_current: bool
+    is_latest_effective: bool
+    posted_at: str
+
+
 class BidQualificationVM(BaseModel):
     industry_limited: bool
     international_bid: str
@@ -61,6 +71,9 @@ class BidListItemVM(BaseModel):
     favorite: bool
     status: str
     status_variant: str
+    version_label: str
+    version_variant: str
+    version_summary: str
     business_type: str
     domain_type: str
     notice_type: str
@@ -85,6 +98,10 @@ class BidDrawerVM(BaseModel):
     business_type: str
     status: str
     status_variant: str
+    version_label: str
+    version_variant: str
+    version_summary: str = ""
+    is_latest_effective: bool = False
     description_text: str = ""
     detail_url: str = ""
     crawl_excerpt: str = ""
@@ -93,6 +110,7 @@ class BidDrawerVM(BaseModel):
     attachments: list[BidAttachmentVM]
     timeline: list[TimelineStageVM]
     history: list[BidHistoryItemVM]
+    version_history: list[BidVersionItemVM]
 
 
 class BidsPageVM(BaseModel):

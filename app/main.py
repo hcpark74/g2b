@@ -259,6 +259,7 @@ def list_raw_bids(
     search_query: str | None = None,
     status: str | None = None,
     favorites_only: bool = False,
+    include_versions: bool = False,
     keyword: str | None = None,
     org: str | None = None,
     budget_min: int | None = None,
@@ -273,6 +274,7 @@ def list_raw_bids(
             search_query=search_query,
             status=status,
             favorites_only=favorites_only,
+            include_versions=include_versions,
             keyword=keyword,
             org=org,
             budget_min=budget_min,
@@ -289,6 +291,7 @@ def list_raw_bids(
                 search_query=search_query,
                 status=status,
                 favorites_only=favorites_only,
+                include_versions=include_versions,
                 keyword=keyword,
                 org=org,
                 budget_min=budget_min,
@@ -305,6 +308,7 @@ def list_raw_bids(
         search_query=search_query,
         status=status,
         favorites_only=favorites_only,
+        include_versions=include_versions,
         keyword=keyword,
         org=org,
         budget_min=budget_min,
@@ -323,6 +327,7 @@ def list_raw_bids_page(
     search_query: str | None = None,
     status: str | None = None,
     favorites_only: bool = False,
+    include_versions: bool = False,
     keyword: str | None = None,
     org: str | None = None,
     budget_min: int | None = None,
@@ -339,6 +344,7 @@ def list_raw_bids_page(
             search_query=search_query,
             status=status,
             favorites_only=favorites_only,
+            include_versions=include_versions,
             keyword=keyword,
             org=org,
             budget_min=budget_min,
@@ -359,6 +365,7 @@ def list_raw_bids_page(
                 search_query=search_query,
                 status=status,
                 favorites_only=favorites_only,
+                include_versions=include_versions,
                 keyword=keyword,
                 org=org,
                 budget_min=budget_min,
@@ -377,6 +384,7 @@ def list_raw_bids_page(
         search_query=search_query,
         status=status,
         favorites_only=favorites_only,
+        include_versions=include_versions,
         keyword=keyword,
         org=org,
         budget_min=budget_min,
@@ -482,11 +490,13 @@ def get_bids_page_context(
     search_query: str | None = None,
     status: str | None = None,
     favorites_only: bool = False,
+    include_versions: bool = False,
 ) -> dict[str, object]:
     raw_bids = list_raw_bids(
         search_query=search_query,
         status=status,
         favorites_only=favorites_only,
+        include_versions=include_versions,
     )
     last_synced_at = get_last_synced_at(raw_bids)
     page_vm = build_bids_page_vm(
@@ -502,6 +512,8 @@ def get_bids_page_context(
         "search_query": (search_query or "").strip(),
         "status_filter": (status or "").strip(),
         "favorites_only": favorites_only,
+        "include_versions": include_versions,
+        "show_version_filter": True,
         "bid_status_options": BID_STATUS_OPTIONS,
     }
 
@@ -597,6 +609,7 @@ def get_favorites_page_context(
         "status_filter": (status or "").strip(),
         "favorites_only": True,
         "force_favorites_only": True,
+        "show_version_filter": False,
         "filter_form_action": "/favorites",
         "filter_hx_get": "/partials/favorites/table",
         "filter_hx_target": "#favorites-table-container",
@@ -1904,6 +1917,11 @@ def bids_page(request: Request):
     search_query = request.query_params.get("q")
     status = request.query_params.get("status")
     favorites_only = request.query_params.get("favorites") in {"1", "true", "on"}
+    include_versions = request.query_params.get("include_versions") in {
+        "1",
+        "true",
+        "on",
+    }
     return templates.TemplateResponse(
         request=request,
         name="pages/bids/index.html",
@@ -1911,6 +1929,7 @@ def bids_page(request: Request):
             search_query=search_query,
             status=status,
             favorites_only=favorites_only,
+            include_versions=include_versions,
         ),
     )
 
@@ -1962,6 +1981,11 @@ def bids_table_partial(request: Request):
     search_query = request.query_params.get("q")
     status = request.query_params.get("status")
     favorites_only = request.query_params.get("favorites") in {"1", "true", "on"}
+    include_versions = request.query_params.get("include_versions") in {
+        "1",
+        "true",
+        "on",
+    }
     return templates.TemplateResponse(
         request=request,
         name="partials/bids/_bid_table.html",
@@ -1969,6 +1993,7 @@ def bids_table_partial(request: Request):
             search_query=search_query,
             status=status,
             favorites_only=favorites_only,
+            include_versions=include_versions,
         ),
     )
 

@@ -3,6 +3,12 @@
     <div>
       <div class="soft-label mb-1">선택된 공고</div>
       <div class="fw-semibold">{{ selected_bid.title if selected_bid is defined and selected_bid else '공고를 선택하면 상세 정보가 표시됩니다.' }}</div>
+      {% if selected_bid is defined and selected_bid %}
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          {% with label=selected_bid.status, variant=selected_bid.status_variant %}{% include "partials/shared/_status_badge.html" %}{% endwith %}
+          {% with label=selected_bid.version_label, variant=selected_bid.version_variant %}{% include "partials/shared/_status_badge.html" %}{% endwith %}
+        </div>
+      {% endif %}
     </div>
     <button class="btn btn-sm btn-outline-secondary">닫기</button>
   </div>

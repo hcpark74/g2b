@@ -14,6 +14,7 @@ from app.models import (
     TimelineStageSnapshot,
 )
 from app.repositories.sqlmodel_bid_repository import SqlModelBidRepository
+from tests.bid_version_fixtures import seed_bid_version_chain
 
 
 def _make_repository() -> tuple[Session, SqlModelBidRepository]:
@@ -313,6 +314,95 @@ def test_list_bids_keyword_matches_attachment_name() -> None:
         bids = repository.list_bids(keyword="특수시방서")
 
         assert [bid["bid_id"] for bid in bids] == ["R26BK00000009-000"]
+    finally:
+        session.close()
+
+
+def test_bid_version_fixture_preserves_each_version_as_separate_row() -> None:
+    session, repository = _make_repository()
+    try:
+        ids = seed_bid_version_chain(session)
+
+        original = repository.get_bid(ids["original_bid_id"])
+        revision = repository.get_bid(ids["revision_bid_id"])
+        cancellation = repository.get_bid(ids["cancellation_bid_id"])
+
+        assert original["bid_seq"] == "000"
+        assert revision["bid_seq"] == "001"
+        assert cancellation["bid_seq"] == "002"
+        assert original["title"] == "통합 유지보수 용역"
+        assert revision["title"] == "통합 유지보수 용역 정정공고"
+        assert cancellation["title"] == "통합 유지보수 용역 취소공고"
+        assert cancellation["status"] == "보관"
+    finally:
+        session.close()
+
+
+def test_list_bids_can_return_all_versions_for_same_bid_number() -> None:
+    session, repository = _make_repository()
+    try:
+        ids = seed_bid_version_chain(session)
+
+        bids = repository.list_bids(search_query=ids["bid_no"])
+
+        assert [bid["bid_id"] for bid in bids] == [
+            ids["cancellation_bid_id"],
+            ids["revision_bid_id"],
+            ids["original_bid_id"],
+        ]
+    finally:
+        session.close()
+
+
+def test_list_bids_can_include_historical_versions_with_filter() -> None:
+    session, repository = _make_repository()
+    try:
+        ids = seed_bid_version_chain(session)
+
+        bids = repository.list_bids(include_versions=True)
+
+        assert [bid["bid_id"] for bid in bids] == [
+            ids["cancellation_bid_id"],
+            ids["revision_bid_id"],
+            ids["original_bid_id"],
+        ]
+    finally:
+        session.close()
+
+
+def test_list_bids_defaults_to_latest_effective_version_per_bid_number() -> None:
+    session, repository = _make_repository()
+    try:
+        ids = seed_bid_version_chain(session)
+
+        bids = repository.list_bids()
+
+        assert [bid["bid_id"] for bid in bids] == [ids["revision_bid_id"]]
+        assert bids[0]["title"] == "통합 유지보수 용역 정정공고"
+        assert bids[0]["version_label"] == "정정본"
+        assert (
+            bids[0]["version_summary"] == "현재 보고 있는 공고는 최신 유효 공고입니다."
+        )
+    finally:
+        session.close()
+
+
+def test_get_bid_includes_version_history_metadata() -> None:
+    session, repository = _make_repository()
+    try:
+        ids = seed_bid_version_chain(session)
+
+        bid = repository.get_bid(ids["cancellation_bid_id"])
+
+        assert bid["version_label"] == "취소본"
+        assert bid["is_latest_effective"] is False
+        assert bid["version_history"][0]["bid_id"] == ids["cancellation_bid_id"]
+        assert bid["version_history"][1]["is_latest_effective"] is True
+        assert bid["version_history"][1]["bid_id"] == ids["revision_bid_id"]
+        assert bid["timeline"][0]["stage"] == "공고 버전"
+        assert bid["timeline"][0]["meta"] == "취소 등록"
+        assert bid["history"][0]["item"] == "공고버전"
+        assert bid["history"][0]["after"] == "취소본"
     finally:
         session.close()
 

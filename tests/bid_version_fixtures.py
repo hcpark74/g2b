@@ -1,0 +1,90 @@
+from datetime import datetime
+
+from sqlmodel import Session
+
+from app.models import Bid, BidDetail
+
+
+def seed_bid_version_chain(
+    session: Session,
+    *,
+    bid_no: str = "R26BK99990001",
+) -> dict[str, str]:
+    original_id = f"{bid_no}-000"
+    revision_id = f"{bid_no}-001"
+    cancellation_id = f"{bid_no}-002"
+
+    session.add(
+        Bid(
+            bid_id=original_id,
+            bid_no=bid_no,
+            bid_seq="000",
+            title="통합 유지보수 용역",
+            category="용역",
+            notice_org="조달청",
+            demand_org="한국지능정보원",
+            posted_at=datetime(2026, 3, 10, 9, 0),
+            closed_at=datetime(2026, 3, 18, 14, 0),
+            last_changed_at=datetime(2026, 3, 10, 9, 0),
+        )
+    )
+    session.add(
+        BidDetail(
+            bid_id=original_id,
+            description_text="원공고 본문",
+            detail_url=f"https://example.com/bids/{original_id}",
+        )
+    )
+
+    session.add(
+        Bid(
+            bid_id=revision_id,
+            bid_no=bid_no,
+            bid_seq="001",
+            title="통합 유지보수 용역 정정공고",
+            category="용역",
+            notice_org="조달청",
+            demand_org="한국지능정보원",
+            posted_at=datetime(2026, 3, 12, 10, 30),
+            closed_at=datetime(2026, 3, 20, 14, 0),
+            last_changed_at=datetime(2026, 3, 12, 10, 30),
+        )
+    )
+    session.add(
+        BidDetail(
+            bid_id=revision_id,
+            description_text="정정공고 본문",
+            detail_url=f"https://example.com/bids/{revision_id}",
+        )
+    )
+
+    session.add(
+        Bid(
+            bid_id=cancellation_id,
+            bid_no=bid_no,
+            bid_seq="002",
+            title="통합 유지보수 용역 취소공고",
+            category="용역",
+            notice_org="조달청",
+            demand_org="한국지능정보원",
+            status="archived",
+            posted_at=datetime(2026, 3, 13, 8, 45),
+            closed_at=datetime(2026, 3, 20, 14, 0),
+            last_changed_at=datetime(2026, 3, 13, 8, 45),
+        )
+    )
+    session.add(
+        BidDetail(
+            bid_id=cancellation_id,
+            description_text="취소공고 본문",
+            detail_url=f"https://example.com/bids/{cancellation_id}",
+        )
+    )
+    session.commit()
+
+    return {
+        "bid_no": bid_no,
+        "original_bid_id": original_id,
+        "revision_bid_id": revision_id,
+        "cancellation_bid_id": cancellation_id,
+    }

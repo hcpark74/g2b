@@ -6,6 +6,7 @@ from app.presentation.viewmodels.bids import (
     BidDrawerVM,
     BidHistoryItemVM,
     BidReferenceInfoVM,
+    BidVersionItemVM,
     BidListItemVM,
     BidQualificationItemVM,
     BidQualificationVM,
@@ -28,6 +29,9 @@ def build_bid_list_item_vm(raw_bid: dict[str, Any], row_number: int) -> BidListI
         favorite=bool(raw_bid.get("favorite", False)),
         status=str(raw_bid.get("status", "")),
         status_variant=str(raw_bid.get("status_variant", "secondary")),
+        version_label=str(raw_bid.get("version_label", "")),
+        version_variant=str(raw_bid.get("version_variant", "secondary")),
+        version_summary=str(raw_bid.get("version_summary", "")),
         business_type=str(raw_bid.get("business_type", "")),
         domain_type=str(raw_bid.get("domain_type", "")),
         notice_type=str(raw_bid.get("notice_type", "")),
@@ -70,6 +74,10 @@ def build_bid_drawer_vm(raw_bid: dict[str, Any]) -> BidDrawerVM:
         business_type=str(raw_bid.get("business_type", "")),
         status=str(raw_bid.get("status", "")),
         status_variant=str(raw_bid.get("status_variant", "secondary")),
+        version_label=str(raw_bid.get("version_label", "")),
+        version_variant=str(raw_bid.get("version_variant", "secondary")),
+        version_summary=str(raw_bid.get("version_summary", "")),
+        is_latest_effective=bool(raw_bid.get("is_latest_effective", False)),
         description_text=str(raw_bid.get("description_text", "")),
         detail_url=str(raw_bid.get("detail_url", "")),
         crawl_excerpt=str(raw_bid.get("crawl_excerpt", "")),
@@ -115,6 +123,9 @@ def build_bid_drawer_vm(raw_bid: dict[str, Any]) -> BidDrawerVM:
             for item in timeline_items
         ],
         history=[BidHistoryItemVM(**item) for item in history_items],
+        version_history=[
+            BidVersionItemVM(**item) for item in raw_bid.get("version_history", [])
+        ],
     )
 
 

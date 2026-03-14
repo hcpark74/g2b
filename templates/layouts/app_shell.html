@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block body %}
+  <div id="app-shell">
+    {% include "partials/shared/_header.html" %}
+    <div id="app-body" class="container-fluid py-3">
+      <div class="d-flex gap-3 align-items-start">
+        <aside id="left-sidebar" class="sidebar-shell app-surface rounded shadow-sm">
+          {% include "partials/shared/_sidebar.html" %}
+        </aside>
+        <main id="main-content" class="content-shell flex-grow-1">
+          {% block content %}{% endblock %}
+        </main>
+        <section id="bid-drawer-container" class="drawer-shell app-surface rounded shadow-sm">
+          {% block drawer %}{% endblock %}
+        </section>
+      </div>
+    </div>
+  </div>
+{% endblock %}

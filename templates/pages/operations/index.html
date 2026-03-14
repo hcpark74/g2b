@@ -1,0 +1,157 @@
+{% extends "layouts/app_shell.html" %}
+
+{% block title %}운영 현황{% endblock %}
+
+{% block content %}
+  <div class="app-surface app-card rounded shadow-sm p-4 mb-3">
+    <h1 class="h4 mb-2">{{ page_vm.title }}</h1>
+    <p class="text-secondary mb-0">{{ page_vm.description }}</p>
+  </div>
+
+  {% include "partials/shared/_summary_cards.html" %}
+
+  <div class="card app-card shadow-sm border-0 mt-3 mb-3">
+    <div class="card-body app-subtle rounded">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label small text-secondary">상태 필터</label>
+          <select name="status" class="form-select">
+            <option value="" {% if not status_filter %}selected{% endif %}>전체 상태</option>
+            <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>완료</option>
+            <option value="running" {% if status_filter == 'running' %}selected{% endif %}>진행중</option>
+            <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>실패</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small text-secondary">작업유형 필터</label>
+          <select name="job_type" class="form-select">
+            <option value="" {% if not job_type_filter %}selected{% endif %}>전체 작업유형</option>
+            {% for job_type in available_job_types %}
+              <option value="{{ job_type }}" {% if job_type_filter == job_type %}selected{% endif %}>{{ job_type }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2 d-grid">
+          <button class="btn btn-primary" type="submit">적용</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-surface rounded shadow-sm p-2 border mt-3">
+    <div class="table-responsive">
+      <table class="table table-sm app-table mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>작업유형</th>
+            <th>대상</th>
+            <th>상태</th>
+            <th>시작시각</th>
+            <th>종료시각</th>
+            <th>메시지</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+            <tr>
+              <td>{{ item.job_type }}</td>
+              <td>{{ item.target }}</td>
+              <td>
+                {% if item.status == 'completed' %}
+                  {% with label='완료', variant='success' %}{% include "partials/shared/_status_badge.html" %}{% endwith %}
+                {% elif item.status == 'running' %}
+                  {% with label='진행중', variant='primary' %}{% include "partials/shared/_status_badge.html" %}{% endwith %}
+                {% else %}
+                  {% with label='실패', variant='danger' %}{% include "partials/shared/_status_badge.html" %}{% endwith %}
+                {% endif %}
+              </td>
+              <td>{{ item.started_at }}</td>
+              <td>{{ item.finished_at }}</td>
+              <td>
+                {% if item.status == 'failed' and ' exception_type=' in item.message %}
+                  {% set parts = item.message.split(' ') %}
+                  {% for part in parts %}
+                    {% if part.startswith('operation=') %}
+                      <div><span class="text-secondary">오퍼레이션</span>: {{ part.replace('operation=', '') }}</div>
+                    {% elif part.startswith('exception_type=') %}
+                      <div><span class="text-secondary">예외</span>: {{ part.replace('exception_type=', '') }}</div>
+                    {% elif part.startswith('retry_count=') %}
+                      <div><span class="text-secondary">재시도</span>: {{ part.replace('retry_count=', '') }}회</div>
+                    {% elif part.startswith('status_code=') %}
+                      <div><span class="text-secondary">HTTP</span>: {{ part.replace('status_code=', '') }}</div>
+                    {% elif part.startswith('detail=') %}
+                      <div><span class="text-secondary">상세</span>: {{ part.replace('detail=', '') }}</div>
+                    {% endif %}
+                  {% endfor %}
+                {% elif item.job_type == 'phase2_batch_sync' and item.message.startswith('selection_mode=') %}
+                  {% set selection_mode = item.message.split('selection_mode=')[1].split(' ')[0] %}
+                  {% set processed_count = item.message.split('processed ')[1].split(' bids')[0] %}
+                  {% set detail_items = item.message.split('detail_items=')[1].split(' ')[0] %}
+                  {% set contract_items = item.message.split('contract_items=')[1].split(' ')[0] %}
+                  {% set crawl_attachments = item.message.split('crawl_attachments=')[1].split(' ')[0] %}
+                  <div><span class="text-secondary">선별모드</span>: {{ selection_mode }}</div>
+                  <div><span class="text-secondary">처리 공고</span>: {{ processed_count }}건</div>
+                  <div><span class="text-secondary">상세 보강</span>: {{ detail_items }}건</div>
+                  <div><span class="text-secondary">계약과정</span>: {{ contract_items }}건</div>
+                  <div><span class="text-secondary">크롤링 첨부</span>: {{ crawl_attachments }}건</div>
+                {% elif item.job_type == 'bid_page_crawl' and item.message.startswith('processed ') and ', stored ' in item.message %}
+                  {% set parts = item.message.split(', ') %}
+                  {% for part in parts %}
+                    {% if part.startswith('processed ') %}
+                      <div><span class="text-secondary">처리 공고</span>: {{ part.replace('processed ', '').replace(' bids', '건') }}</div>
+                    {% elif part.startswith('stored ') %}
+                      <div><span class="text-secondary">첨부 저장</span>: {{ part.replace('stored ', '').replace(' attachments', '건') }}</div>
+                    {% endif %}
+                  {% endfor %}
+                {% elif item.job_type == 'contract_process_sync' and item.message.startswith('processed ') and ', fetched ' in item.message %}
+                  {% set parts = item.message.split(', ') %}
+                  {% for part in parts %}
+                    {% if part.startswith('processed ') %}
+                      <div><span class="text-secondary">처리 공고</span>: {{ part.replace('processed ', '').replace(' bids', '건') }}</div>
+                    {% elif part.startswith('fetched ') %}
+                      <div><span class="text-secondary">계약과정 조회</span>: {{ part.replace('fetched ', '').replace(' items', '건') }}</div>
+                    {% endif %}
+                  {% endfor %}
+                {% elif item.job_type == 'bid_detail_enrichment' and ' processed ' in item.message and ' fetched ' in item.message %}
+                  {% set parts = item.message.split(' ') %}
+                  {% for part in parts %}
+                    {% if part.startswith('operations=') %}
+                      <div><span class="text-secondary">오퍼레이션</span>: {{ part.replace('operations=', '') }}</div>
+                    {% elif part.startswith('selection_mode=') %}
+                      <div><span class="text-secondary">선별모드</span>: {{ part.replace('selection_mode=', '') }}</div>
+                    {% elif part == 'processed' %}
+                    {% elif part.endswith('bids,') and loop.index0 > 0 and parts[loop.index0 - 1] == 'processed' %}
+                      <div><span class="text-secondary">처리 공고</span>: {{ part.replace(' bids,', '건') }}</div>
+                    {% elif part.startswith('fetched') %}
+                    {% elif part.endswith('items') and loop.index0 > 0 and parts[loop.index0 - 1] == 'fetched' %}
+                      <div><span class="text-secondary">상세 보강</span>: {{ part.replace(' items', '건') }}</div>
+                    {% endif %}
+                  {% endfor %}
+                {% elif item.status == 'completed' and item.message.startswith('fetched ') and ', upserted ' in item.message %}
+                  {% set parts = item.message.split(', ') %}
+                  {% for part in parts %}
+                    {% if part.startswith('fetched ') %}
+                      <div><span class="text-secondary">조회</span>: {{ part.replace('fetched ', '').replace(' bids', '건') }}</div>
+                    {% elif part.startswith('upserted ') %}
+                      <div><span class="text-secondary">반영</span>: {{ part.replace('upserted ', '').replace(' bids', '건') }}</div>
+                    {% endif %}
+                  {% endfor %}
+                {% else %}
+                  {{ item.message }}
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6" class="text-center text-secondary py-4">표시할 작업 이력이 없습니다.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
+
+{% block drawer %}
+  {% include "partials/bids/_drawer.html" %}
+{% endblock %}

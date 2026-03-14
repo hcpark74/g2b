@@ -1,0 +1,61 @@
+{% extends "layouts/app_shell.html" %}
+
+{% block title %}사전 탐색{% endblock %}
+
+{% block content %}
+  <div class="app-surface app-card rounded shadow-sm p-4 mb-3">
+    <h1 class="h4 mb-2">{{ page_vm.title }}</h1>
+    <p class="text-secondary mb-0">{{ page_vm.description }}</p>
+  </div>
+
+  {% include "partials/shared/_summary_cards.html" %}
+
+  <div class="card app-card shadow-sm border-0 mt-3 mb-3">
+    <div class="card-body app-subtle rounded">
+      <div class="row g-2">
+        <div class="col-md-3"><input class="form-control" placeholder="사업명, 기관명"></div>
+        <div class="col-md-2"><select class="form-select"><option>전체 단계</option></select></div>
+        <div class="col-md-2"><select class="form-select"><option>전체 업무구분</option></select></div>
+        <div class="col-md-3"><input class="form-control" placeholder="기간"></div>
+        <div class="col-md-2 d-grid"><button class="btn btn-primary">검색</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-surface rounded shadow-sm p-2 border">
+    <div class="table-responsive">
+      <table class="table table-sm app-table mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>단계구분</th>
+            <th>업무구분</th>
+            <th>사업명</th>
+            <th>연결키</th>
+            <th>기관</th>
+            <th>수요기관</th>
+            <th>일자</th>
+            <th>본공고 연결</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+            <tr>
+              <td>{{ item.stage }}</td>
+              <td>{{ item.business_type }}</td>
+              <td><a href="#" class="text-decoration-none app-link">{{ item.title }}</a></td>
+              <td>{{ item.key }}</td>
+              <td>{{ item.org }}</td>
+              <td>{{ item.demand_org }}</td>
+              <td>{{ item.date }}</td>
+              <td>{{ item.linked_bid }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
+
+{% block drawer %}
+  {% include "partials/bids/_drawer.html" %}
+{% endblock %}

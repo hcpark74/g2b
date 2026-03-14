@@ -1,0 +1,33 @@
+{% extends "layouts/app_shell.html" %}
+
+{% block title %}입찰 공고{% endblock %}
+
+{% block content %}
+  <section id="page-header" class="mb-3">
+    {% include "partials/shared/_page_header.html" %}
+  </section>
+
+  <section id="sync-banner" class="mb-3">
+    {% include "partials/dashboard/_sync_banner.html" %}
+  </section>
+
+  <section id="summary-cards" class="mb-3">
+    {% include "partials/shared/_summary_cards.html" %}
+  </section>
+
+  <section id="filter-panel" class="mb-3">
+    {% include "partials/bids/_filter_bar.html" %}
+  </section>
+
+  <section id="table-toolbar" class="mb-2">
+    {% include "partials/bids/_table_toolbar.html" %}
+  </section>
+
+  <section id="bid-table-container">
+    {% include "partials/bids/_bid_table.html" %}
+  </section>
+{% endblock %}
+
+{% block drawer %}
+  {% include "partials/bids/_drawer.html" %}
+{% endblock %}

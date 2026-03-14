@@ -1,0 +1,29 @@
+<div class="app-surface rounded shadow-sm p-2 border">
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-3 app-table">
+      <thead>
+        <tr>
+          <th>No</th>
+          <th>관심</th>
+          <th>업무</th>
+          <th>상태</th>
+          <th>구분</th>
+          <th>공고번호</th>
+          <th>공고명</th>
+          <th>공고기관</th>
+          <th>수요기관</th>
+          <th>게시/마감/개찰</th>
+          <th>단계</th>
+          <th>세부절차</th>
+          <th>진행상태</th>
+          <th>요약</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% include "partials/bids/_bid_table_rows.html" %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/shared/_pagination.html" %}
+</div>

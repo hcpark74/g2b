@@ -1,0 +1,34 @@
+<div class="small text-secondary mb-2">타임라인</div>
+<div class="row g-3">
+  <div class="col-4">
+    <div class="position-relative ps-4">
+      <div style="position:absolute; left:9px; top:10px; bottom:10px; width:2px; background:#d9e2ec;"></div>
+      {% for item in selected_bid.timeline %}
+        <div class="position-relative mb-3">
+          <div
+            style="position:absolute; left:-18px; top:8px; width:14px; height:14px; border-radius:999px; background:{% if item.status == '완료' %}#198754{% elif item.status == '진행중' %}#3d6fd6{% elif item.status == '미도달' %}#94a3b8{% elif item.status == '미체결' %}#f59e0b{% else %}#dc3545{% endif %}; border:2px solid #fff; box-shadow:0 0 0 1px #d9e2ec;"
+          ></div>
+          <div class="fw-semibold small">{{ item.stage }}</div>
+          <div class="text-secondary small">{{ item.status }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="col-8">
+    <div class="d-flex flex-column gap-2">
+      {% for item in selected_bid.timeline %}
+        <div class="card app-card shadow-sm">
+          <div class="card-body py-2 px-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="fw-semibold small">{{ item.stage }}</div>
+              <span class="badge text-bg-{% if item.status == '완료' %}success{% elif item.status == '진행중' %}primary{% elif item.status == '미도달' %}secondary{% elif item.status == '미체결' %}warning{% else %}danger{% endif %}">{{ item.status }}</span>
+            </div>
+            <div class="small mb-1"><span class="text-secondary">번호</span> {{ item.number }}</div>
+            <div class="small mb-1"><span class="text-secondary">일시</span> {{ item.date }}</div>
+            <div class="small text-secondary">{{ item.meta }}</div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>

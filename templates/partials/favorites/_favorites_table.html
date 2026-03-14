@@ -1,0 +1,36 @@
+<div class="app-surface rounded shadow-sm p-2 border">
+  <div class="table-responsive">
+    <table class="table table-sm app-table mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>관심</th>
+          <th>상태</th>
+          <th>업무</th>
+          <th>공고번호</th>
+          <th>공고명</th>
+          <th>공고기관</th>
+          <th>수요기관</th>
+          <th>마감일시</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+          <tr>
+            <td>★</td>
+            <td>{% with label=item.status, variant=item.status_variant %}{% include "partials/shared/_status_badge.html" %}{% endwith %}</td>
+            <td>{{ item.business_type }}</td>
+            <td>{{ item.display_bid_no }}</td>
+            <td><a href="#" class="text-decoration-none app-link">{{ item.title }}</a></td>
+            <td>{{ item.notice_org }}</td>
+            <td>{{ item.demand_org }}</td>
+            <td>{{ item.closed_at }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="8" class="text-center text-secondary py-4">표시할 관심 공고가 없습니다.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

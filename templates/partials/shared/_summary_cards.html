@@ -1,0 +1,13 @@
+{% set summary_items = summary_stats | default(page_vm.summary.items if page_vm.summary is defined else []) %}
+<div class="row g-3">
+  {% for item in summary_items %}
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card app-card shadow-sm h-100">
+        <div class="card-body">
+          <div class="soft-label mb-1">{{ item.label }}</div>
+          <div class="summary-value">{{ item.value }}</div>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>

@@ -1,0 +1,38 @@
+<div class="small text-secondary mb-2">공고일반</div>
+<div class="table-responsive">
+  <table class="table table-sm align-middle mb-0 app-table">
+    <tbody>
+      {% for row in selected_bid.overview_rows | default([]) %}
+        <tr>
+          <th class="w-25 bg-light">{{ row.left_label }}</th>
+          <td>{{ row.left_value }}</td>
+          <th class="w-25 bg-light">{{ row.right_label }}</th>
+          <td>{{ row.right_value }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if selected_bid.description_text is defined and selected_bid.description_text %}
+  <div class="mt-3">
+    <div class="small text-secondary mb-2">본문 요약</div>
+    <div class="app-subtle border rounded p-3 small">{{ selected_bid.description_text }}</div>
+  </div>
+{% endif %}
+
+{% if selected_bid.crawl_excerpt is defined and selected_bid.crawl_excerpt %}
+  <div class="mt-3">
+    <div class="small text-secondary mb-2">크롤링 추출 본문</div>
+    <div class="app-subtle border rounded p-3 small" style="white-space: pre-wrap;">{{ selected_bid.crawl_excerpt }}</div>
+  </div>
+{% endif %}
+
+{% if selected_bid.detail_url is defined and selected_bid.detail_url %}
+  <div class="mt-3">
+    <div class="small text-secondary mb-2">상세 원문 링크</div>
+    <div class="small">
+      <a href="{{ selected_bid.detail_url }}" class="app-link" target="_blank" rel="noreferrer">나라장터 상세 페이지 열기</a>
+    </div>
+  </div>
+{% endif %}

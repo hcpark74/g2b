@@ -1,0 +1,28 @@
+<header id="top-header" class="navbar navbar-expand-lg brand-navbar shadow-sm">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-semibold" href="/bids">Woorisoft G2B</a>
+    <ul class="navbar-nav me-3 d-none d-lg-flex">
+      <li class="nav-item"><a class="nav-link {% if active_nav == 'bids' %}fw-semibold text-white text-decoration-underline{% endif %}" href="/bids">입찰 공고</a></li>
+      <li class="nav-item"><a class="nav-link {% if active_nav == 'prespecs' %}fw-semibold text-white text-decoration-underline{% endif %}" href="/prespecs">사전 탐색</a></li>
+      <li class="nav-item"><a class="nav-link {% if active_nav == 'results' %}fw-semibold text-white text-decoration-underline{% endif %}" href="/results">사후 분석</a></li>
+      <li class="nav-item"><a class="nav-link {% if active_nav == 'favorites' %}fw-semibold text-white text-decoration-underline{% endif %}" href="/favorites">관심 공고</a></li>
+      <li class="nav-item"><a class="nav-link {% if active_nav == 'operations' %}fw-semibold text-white text-decoration-underline{% endif %}" href="/operations">운영 현황</a></li>
+    </ul>
+    <form class="d-flex ms-auto me-3" role="search">
+      <div class="input-group">
+        <span class="input-group-text bg-white border-0">검색</span>
+        <input class="form-control border-0" type="search" placeholder="공고명, 기관명, 공고번호">
+      </div>
+    </form>
+    <span class="navbar-text small me-3">마지막 동기화: {{ last_synced_at | default('-') }}</span>
+    <div class="dropdown">
+      <button class="btn btn-light btn-sm dropdown-toggle" data-bs-toggle="dropdown" type="button">
+        메뉴
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><a class="dropdown-item" href="/operations">운영 현황</a></li>
+        <li><a class="dropdown-item" href="/favorites">관심 공고</a></li>
+      </ul>
+    </div>
+  </div>
+</header>

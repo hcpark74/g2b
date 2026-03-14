@@ -1,0 +1,14 @@
+<div class="small text-secondary mb-2">첨부파일</div>
+<div class="list-group list-group-flush">
+  {% for item in selected_bid.attachments %}
+    <div class="list-group-item px-0 d-flex justify-content-between align-items-start gap-3">
+      <div>
+        <div class="fw-semibold small">{{ item.name }}</div>
+        <div class="text-secondary small">{{ item.type }} / {{ item.source }}</div>
+      </div>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ item.url }}">다운로드</a>
+    </div>
+  {% else %}
+    <div class="text-secondary small">첨부파일이 없습니다.</div>
+  {% endfor %}
+</div>

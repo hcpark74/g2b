@@ -1,0 +1,61 @@
+{% extends "layouts/app_shell.html" %}
+
+{% block title %}사후 분석{% endblock %}
+
+{% block content %}
+  <div class="app-surface app-card rounded shadow-sm p-4 mb-3">
+    <h1 class="h4 mb-2">{{ page_vm.title }}</h1>
+    <p class="text-secondary mb-0">{{ page_vm.description }}</p>
+  </div>
+
+  {% include "partials/shared/_summary_cards.html" %}
+
+  <div class="card app-card shadow-sm border-0 mt-3 mb-3">
+    <div class="card-body app-subtle rounded">
+      <div class="row g-2">
+        <div class="col-md-3"><input class="form-control" placeholder="공고명, 기관명"></div>
+        <div class="col-md-2"><select class="form-select"><option>전체 업무구분</option></select></div>
+        <div class="col-md-3"><input class="form-control" placeholder="기간"></div>
+        <div class="col-md-2"><select class="form-select"><option>낙찰률순</option></select></div>
+        <div class="col-md-2 d-grid"><button class="btn btn-primary">검색</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-surface rounded shadow-sm p-2 border">
+    <div class="table-responsive">
+      <table class="table table-sm app-table mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>공고번호</th>
+            <th>공고명</th>
+            <th>구분</th>
+            <th>낙찰업체</th>
+            <th>낙찰금액</th>
+            <th>낙찰률</th>
+            <th>계약금액</th>
+            <th>계약일자</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+            <tr>
+              <td>{{ item.bid_no }}</td>
+              <td><a href="#" class="text-decoration-none app-link">{{ item.title }}</a></td>
+              <td>{{ item.business_type }}</td>
+              <td>{{ item.winner }}</td>
+              <td>{{ item.award_amount }}</td>
+              <td>{{ item.award_rate }}</td>
+              <td>{{ item.contract_amount }}</td>
+              <td>{{ item.contract_date }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
+
+{% block drawer %}
+  {% include "partials/bids/_drawer.html" %}
+{% endblock %}

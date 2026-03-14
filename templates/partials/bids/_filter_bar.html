@@ -1,0 +1,61 @@
+<div class="card app-card shadow-sm border-0">
+  <div class="card-body app-subtle rounded">
+    <form
+      class="row g-2"
+      action="{{ filter_form_action | default('/bids', true) }}"
+      method="get"
+      hx-get="{{ filter_hx_get | default('/partials/bids/table', true) }}"
+      hx-target="{{ filter_hx_target | default('#bid-table-container', true) }}"
+      hx-swap="innerHTML"
+      hx-push-url="true"
+    >
+      <div class="col-12 col-md-5 col-xl-4">
+        <label class="form-label filter-label">키워드</label>
+        <input
+          class="form-control"
+          name="q"
+          placeholder="공고명, 기관명, 공고번호"
+          value="{{ search_query | default('', true) }}"
+        >
+      </div>
+      <div class="col-6 col-md-3 col-xl-2">
+        <label class="form-label filter-label">상태</label>
+        <select class="form-select" name="status">
+          <option value="" {% if not status_filter %}selected{% endif %}>전체</option>
+          {% for status_value, status_label in bid_status_options %}
+            <option value="{{ status_value }}" {% if status_filter == status_value %}selected{% endif %}>{{ status_label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-4 col-xl-3 d-flex align-items-end">
+        {% if force_favorites_only %}
+          <input type="hidden" name="favorites" value="1">
+          <span class="badge text-bg-warning-subtle border border-warning-subtle text-warning-emphasis mb-2">관심 공고 전용</span>
+        {% else %}
+          <div class="form-check form-switch mb-2">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              role="switch"
+              id="favorites-only"
+              name="favorites"
+              value="1"
+              {% if favorites_only %}checked{% endif %}
+            >
+            <label class="form-check-label" for="favorites-only">관심 공고만 보기</label>
+          </div>
+        {% endif %}
+      </div>
+      <div class="col-12 col-md-5 col-xl-3 d-flex align-items-end gap-2">
+        <button class="btn btn-primary flex-fill" type="submit">검색</button>
+        <a class="btn btn-outline-secondary" href="{{ filter_form_action | default('/bids', true) }}">초기화</a>
+      </div>
+      <div class="col-12 d-flex justify-content-between align-items-center pt-1 small text-muted">
+        <span>현재는 키워드, 상태, 관심 공고 필터를 지원합니다.</span>
+        {% if search_query or status_filter or favorites_only %}
+          <span>필터 적용 중</span>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>

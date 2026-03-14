@@ -1,0 +1,92 @@
+<div class="small text-secondary mb-2">자격/제한</div>
+<div class="list-group list-group-flush mb-3">
+  <div class="list-group-item px-0 d-flex justify-content-between"><span>국내/국제입찰</span><strong>{{ selected_bid.qualification.international_bid }}</strong></div>
+  <div class="list-group-item px-0 d-flex justify-content-between"><span>재입찰 여부</span><strong>{{ selected_bid.qualification.rebid_allowed }}</strong></div>
+  <div class="list-group-item px-0 d-flex justify-content-between"><span>입찰참가 제한</span><strong>{{ selected_bid.qualification.bid_participation_limit }}</strong></div>
+  <div class="list-group-item px-0 d-flex justify-content-between"><span>업종 제한 여부</span><strong>{% if selected_bid.qualification.industry_limited %}있음{% else %}없음{% endif %}</strong></div>
+  <div class="list-group-item px-0 d-flex justify-content-between"><span>공동수급 방식</span><strong>{{ selected_bid.qualification.consortium_method }}</strong></div>
+</div>
+
+<div class="mb-3">
+    <div class="fw-semibold small mb-2">면허 제한</div>
+    <div class="d-flex flex-wrap gap-2">
+    {% for item in selected_bid.qualification.license_limits %}
+      <span class="badge text-bg-light border text-dark">{{ item }}</span>
+    {% else %}
+      <span class="text-secondary small">제한 없음</span>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="mb-3">
+    <div class="fw-semibold small mb-2">허용 업종</div>
+    <div class="d-flex flex-wrap gap-2">
+    {% for item in selected_bid.qualification.permitted_industries %}
+      <span class="badge text-bg-light border text-dark">{{ item }}</span>
+    {% else %}
+      <span class="text-secondary small">없음</span>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="mb-3">
+    <div class="fw-semibold small mb-2">참가 가능 지역</div>
+    <div class="d-flex flex-wrap gap-2">
+    {% for item in selected_bid.qualification.regions %}
+      <span class="badge text-bg-light border text-dark">{{ item }}</span>
+    {% else %}
+      <span class="text-secondary small">없음</span>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="mb-3">
+    <div class="fw-semibold small mb-2">참조 기준정보</div>
+    <div class="list-group list-group-flush">
+    {% for item in selected_bid.qualification.reference_infos %}
+      <div class="list-group-item px-0">
+        <div class="d-flex justify-content-between gap-3 mb-1">
+          <span>{{ item.name }}</span>
+          <strong class="text-end">{{ item.law_name }}</strong>
+        </div>
+        <div class="small text-secondary d-flex justify-content-between gap-3">
+          <span>업종코드: {{ item.code }}</span>
+          <span>원천 API: {{ item.source_api_name }}</span>
+        </div>
+      </div>
+    {% else %}
+      <div class="text-secondary small">연결된 기준정보가 없습니다.</div>
+    {% endfor %}
+  </div>
+</div>
+
+<div>
+  <div class="fw-semibold small mb-2">참가자격 요약</div>
+  <div class="small text-secondary">{{ selected_bid.qualification.qualification_summary }}</div>
+</div>
+
+{% if selected_bid.business_type == '용역' %}
+  <hr>
+  <div class="fw-semibold small mb-2">용역 특성</div>
+  <div class="list-group list-group-flush">
+    {% for item in selected_bid.qualification.business_specific %}
+      <div class="list-group-item px-0 d-flex justify-content-between"><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div>
+    {% endfor %}
+  </div>
+{% elif selected_bid.business_type == '물품' %}
+  <hr>
+  <div class="fw-semibold small mb-2">물품 특성</div>
+  <div class="list-group list-group-flush">
+    {% for item in selected_bid.qualification.business_specific %}
+      <div class="list-group-item px-0 d-flex justify-content-between"><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div>
+    {% endfor %}
+  </div>
+{% elif selected_bid.business_type == '공사' %}
+  <hr>
+  <div class="fw-semibold small mb-2">공사 특성</div>
+  <div class="list-group list-group-flush">
+    {% for item in selected_bid.qualification.business_specific %}
+      <div class="list-group-item px-0 d-flex justify-content-between"><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div>
+    {% endfor %}
+  </div>
+{% endif %}

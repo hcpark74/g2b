@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}g2b{% endblock %}</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous"
+    >
+    <style>
+      :root {
+        --bg-app: #f4f6f8;
+        --bg-surface: #ffffff;
+        --bg-subtle: #eef2f6;
+        --bg-table-head: #edf1f5;
+        --text-primary: #1f2933;
+        --text-secondary: #52606d;
+        --text-soft: #7b8794;
+        --border-default: #d9e2ec;
+        --border-strong: #bcccdc;
+        --brand-primary: #3d6fd6;
+        --brand-primary-hover: #325fc0;
+        --brand-soft: #e8efff;
+      }
+
+      body {
+        background: var(--bg-app);
+        color: var(--text-primary);
+        font-size: 14px;
+      }
+
+      .app-surface {
+        background: var(--bg-surface);
+      }
+
+      .app-subtle {
+        background: var(--bg-subtle);
+      }
+
+      .app-card {
+        border: 1px solid var(--border-default);
+        border-radius: 0.75rem;
+      }
+
+      .app-table thead th {
+        background: var(--bg-table-head);
+        white-space: nowrap;
+        font-size: 0.875rem;
+        border-bottom-width: 1px;
+        color: #3e4c59;
+        font-weight: 600;
+        padding-top: 0.7rem;
+        padding-bottom: 0.7rem;
+      }
+
+      .app-table tbody td {
+        font-size: 0.9rem;
+        vertical-align: middle;
+        padding-top: 0.7rem;
+        padding-bottom: 0.7rem;
+        border-color: #e5e7eb;
+      }
+
+      .app-table tbody tr:hover {
+        background: #f8fbff;
+      }
+
+      .app-table tbody tr.selected-row {
+        background: #eef4ff;
+      }
+
+      .app-link {
+        color: #1d4ed8;
+        font-weight: 500;
+      }
+
+      .app-link:hover {
+        color: #1e40af;
+      }
+
+      .sidebar-shell {
+        width: 240px;
+        min-width: 240px;
+        border: 1px solid var(--border-default);
+      }
+
+      .content-shell {
+        min-width: 0;
+      }
+
+      .drawer-shell {
+        width: 420px;
+        min-width: 420px;
+        border-left: 1px solid var(--border-default);
+        position: sticky;
+        top: 1rem;
+        max-height: calc(100vh - 2rem);
+        overflow: auto;
+      }
+
+      @media (max-width: 1199.98px) {
+        .drawer-shell {
+          display: none;
+        }
+      }
+
+      .summary-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.1;
+      }
+
+      .drawer-tab .nav-link {
+        font-size: 0.875rem;
+        padding: 0.5rem 0.65rem;
+      }
+
+      .drawer-tab .nav-link.active {
+        font-weight: 600;
+        color: var(--brand-primary);
+      }
+
+      .brand-navbar {
+        background: linear-gradient(180deg, #4f7be3 0%, #3d6fd6 100%);
+      }
+
+      .brand-navbar .navbar-brand,
+      .brand-navbar .nav-link,
+      .brand-navbar .navbar-text {
+        color: #fff !important;
+      }
+
+      .sidebar-shell .nav-link {
+        border-radius: 0.65rem;
+        padding: 0.7rem 0.85rem;
+      }
+
+      .sidebar-shell .nav-link.active {
+        background: var(--brand-primary);
+      }
+
+      .soft-label {
+        color: var(--text-soft);
+        font-size: 0.82rem;
+      }
+
+      .filter-label {
+        color: var(--text-secondary);
+        font-size: 0.82rem;
+        font-weight: 600;
+      }
+
+      .toolbar-chip {
+        background: var(--brand-soft);
+        color: var(--brand-primary);
+        border: 1px solid #c7d7fe;
+        border-radius: 999px;
+        padding: 0.2rem 0.6rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+
+      .section-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+      }
+
+      .sticky-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+      }
+    </style>
+    {% block head_extra %}{% endblock %}
+  </head>
+  <body>
+    {% block body %}{% endblock %}
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+      crossorigin="anonymous"
+    ></script>
+    <script>
+      document.addEventListener("click", function (event) {
+        const row = event.target.closest("tr[data-bid-row]")
+        if (!row) return
+
+        document.querySelectorAll("tr[data-bid-row]").forEach(function (item) {
+          item.classList.remove("selected-row")
+        })
+
+        row.classList.add("selected-row")
+      })
+    </script>
+    {% block scripts %}{% endblock %}
+  </body>
+  </html>

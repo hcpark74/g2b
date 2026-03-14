@@ -1,0 +1,41 @@
+{% for bid in page_vm.bids | default([]) %}
+  <tr data-bid-row="{{ bid.bid_id }}" class="{% if loop.first %}selected-row{% endif %}" hx-get="/partials/bids/{{ bid.bid_id }}/drawer" hx-target="#bid-drawer-container" hx-swap="innerHTML" style="cursor: pointer;">
+    <td>{{ loop.index }}</td>
+    <td><button class="btn btn-sm btn-outline-warning">{% if bid.favorite %}★{% else %}☆{% endif %}</button></td>
+    <td>{{ bid.business_type }}</td>
+    <td>{% with label=bid.status, variant=bid.status_variant %}{% include "partials/shared/_status_badge.html" %}{% endwith %}</td>
+    <td>{{ bid.domain_type }} / {{ bid.notice_type }}</td>
+    <td>{{ bid.display_bid_no }}</td>
+    <td><a href="#" class="text-decoration-none app-link">{{ bid.title }}</a></td>
+    <td>{{ bid.notice_org }}</td>
+    <td>{{ bid.demand_org }}</td>
+    <td>
+      <div>{{ bid.posted_at }}</div>
+      <div class="text-secondary small">{{ bid.closed_at }}</div>
+      <div class="text-secondary small">{{ bid.opened_at }}</div>
+    </td>
+    <td>{{ bid.stage_label }}</td>
+    <td>{{ bid.step_label }}</td>
+    <td>{{ bid.progress_label }}</td>
+    <td>{% with label=bid.status, variant=bid.status_variant %}{% include "partials/shared/_status_badge.html" %}{% endwith %}</td>
+    <td class="text-end">
+      <button
+        class="btn btn-sm btn-outline-secondary"
+        type="button"
+        hx-get="/partials/bids/{{ bid.bid_id }}/timeline-inline"
+        hx-target="#timeline-inline-{{ loop.index0 }}"
+        hx-swap="innerHTML"
+        hx-on:click="event.stopPropagation()"
+      >더보기</button>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="15" class="p-0 border-0">
+      <div id="timeline-inline-{{ loop.index0 }}"></div>
+    </td>
+  </tr>
+{% else %}
+  <tr>
+    <td colspan="15" class="text-center text-secondary py-4">표시할 공고가 없습니다.</td>
+  </tr>
+{% endfor %}

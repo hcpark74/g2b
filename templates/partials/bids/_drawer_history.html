@@ -1,0 +1,27 @@
+<div class="small text-secondary mb-2">변경 이력</div>
+<div class="table-responsive">
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr>
+        <th>변경일시</th>
+        <th>항목</th>
+        <th>변경 전</th>
+        <th>변경 후</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in selected_bid.history %}
+        <tr>
+          <td>{{ item.changed_at }}</td>
+          <td>{{ item.item }}</td>
+          <td>{{ item.before }}</td>
+          <td>{{ item.after }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="4" class="text-center text-secondary py-3">변경 이력이 없습니다.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

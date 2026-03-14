@@ -1,0 +1,754 @@
+{% extends "base.html" %}
+
+{% block title %}API Docs | g2b{% endblock %}
+
+{% block head_extra %}
+  <style>
+    :root {
+      --docs-shell-bg: linear-gradient(180deg, #f4f7fb 0%, #edf2f8 100%);
+      --docs-panel-bg: rgba(255, 255, 255, 0.97);
+      --docs-panel-border: #d7e0ea;
+      --docs-accent: #2168b4;
+      --docs-accent-strong: #0f4f92;
+      --docs-accent-soft: #edf5ff;
+      --docs-text-soft: #66788a;
+      --docs-text-muted: #7c8d9f;
+      --docs-shadow: 0 18px 38px rgba(30, 58, 95, 0.07);
+      --docs-line: #e7edf4;
+      --docs-table: #f8fbfe;
+    }
+
+    body {
+      background: var(--docs-shell-bg);
+      font-family: "Noto Sans KR", "Malgun Gothic", sans-serif;
+    }
+
+    .docs-layout {
+      display: grid;
+      grid-template-columns: 290px minmax(0, 1fr);
+      gap: 1rem;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+
+    .docs-panel {
+      background: var(--docs-panel-bg);
+      border: 1px solid var(--docs-panel-border);
+      border-radius: 1rem;
+      box-shadow: var(--docs-shadow);
+    }
+
+    .docs-sidebar {
+      padding: 1.25rem;
+      position: sticky;
+      top: 1rem;
+      align-self: start;
+    }
+
+    .docs-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.32rem 0.72rem;
+      border-radius: 999px;
+      background: var(--docs-accent-soft);
+      color: var(--docs-accent);
+      font-size: 0.74rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .docs-title {
+      margin: 0.9rem 0 0.45rem;
+      font-size: 1.7rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: #1b3654;
+    }
+
+    .docs-subtitle {
+      margin: 0;
+      color: var(--docs-text-soft);
+      line-height: 1.6;
+      font-size: 0.95rem;
+    }
+
+    .docs-sidebar-meta {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--docs-line);
+      display: grid;
+      gap: 0.7rem;
+    }
+
+    .docs-meta-item {
+      display: grid;
+      gap: 0.18rem;
+    }
+
+    .docs-meta-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--docs-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .docs-meta-value {
+      color: #21364d;
+      font-size: 0.93rem;
+      font-weight: 600;
+    }
+
+    .docs-tree {
+      margin-top: 1.35rem;
+      padding: 1rem;
+      border-radius: 0.85rem;
+      background: linear-gradient(180deg, #fbfdff 0%, #f5f9fd 100%);
+      border: 1px solid #dde7f1;
+    }
+
+    .docs-tree-group + .docs-tree-group {
+      margin-top: 0.9rem;
+      padding-top: 0.9rem;
+      border-top: 1px dashed #d6e2ef;
+    }
+
+    .docs-tree details {
+      margin: 0;
+    }
+
+    .docs-tree summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      cursor: pointer;
+      font-weight: 700;
+      color: #1f3a58;
+      font-size: 0.98rem;
+    }
+
+    .docs-tree summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .docs-tree-toggle {
+      width: 1.3rem;
+      height: 1.3rem;
+      border-radius: 0.3rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #e0ebf8;
+      color: var(--docs-accent);
+      font-size: 0.76rem;
+      transition: transform 0.2s ease;
+    }
+
+    details[open] .docs-tree-toggle {
+      transform: rotate(90deg);
+    }
+
+    .docs-tree-list {
+      margin: 0.95rem 0 0 1.95rem;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    .docs-tree-button {
+      width: 100%;
+      border: 1px solid #dbe6f0;
+      border-radius: 0.7rem;
+      background: #fff;
+      padding: 0.8rem 0.9rem;
+      text-align: left;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(71, 103, 146, 0.04);
+    }
+
+    .docs-tree-button:hover,
+    .docs-tree-button:focus-visible {
+      border-color: #b8cff0;
+      background: #f4f8fd;
+      outline: none;
+    }
+
+    .docs-tree-button.is-active {
+      border-color: #9bbce5;
+      background: linear-gradient(180deg, #f2f7fe 0%, #e7f0fb 100%);
+      box-shadow: 0 10px 18px rgba(46, 99, 182, 0.1);
+    }
+
+    .docs-tree-label {
+      display: block;
+      font-weight: 700;
+      color: #1b3550;
+      font-size: 0.94rem;
+    }
+
+    .docs-tree-description {
+      display: block;
+      margin-top: 0.25rem;
+      color: var(--docs-text-soft);
+      font-size: 0.84rem;
+      line-height: 1.5;
+    }
+
+    .docs-content {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .docs-content-header {
+      padding: 0;
+      border-bottom: 1px solid var(--docs-line);
+      display: block;
+    }
+
+    .docs-banner {
+      padding: 1.4rem 1.5rem 1rem;
+      background: linear-gradient(180deg, #fafdff 0%, #f3f7fc 100%);
+      border-bottom: 1px solid var(--docs-line);
+    }
+
+    .docs-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      color: var(--docs-text-muted);
+      font-size: 0.82rem;
+      margin-bottom: 0.55rem;
+    }
+
+    .docs-breadcrumb strong {
+      color: var(--docs-accent-strong);
+    }
+
+    .docs-banner-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: start;
+      flex-wrap: wrap;
+    }
+
+    .docs-content-title {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #173552;
+    }
+
+    .docs-content-description {
+      margin: 0.55rem 0 0;
+      color: var(--docs-text-soft);
+      max-width: 780px;
+      line-height: 1.6;
+    }
+
+    .docs-banner-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+
+    .docs-link {
+      color: var(--docs-accent-strong);
+      font-weight: 700;
+      text-decoration: none;
+      padding: 0.55rem 0.9rem;
+      border-radius: 999px;
+      border: 1px solid #c7d8ec;
+      background: #fff;
+    }
+
+    .docs-link:hover {
+      background: #f7fbff;
+    }
+
+    .docs-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.42rem 0.72rem;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid #d8e3ee;
+      color: #486176;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .docs-info-table {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      border-top: 1px solid var(--docs-line);
+      background: var(--docs-table);
+    }
+
+    .docs-info-row {
+      display: grid;
+      grid-template-columns: 132px minmax(0, 1fr);
+      min-height: 52px;
+      border-right: 1px solid var(--docs-line);
+      border-bottom: 1px solid var(--docs-line);
+    }
+
+    .docs-info-row:nth-child(2n) {
+      border-right: 0;
+    }
+
+    .docs-info-label,
+    .docs-info-value {
+      padding: 0.85rem 1rem;
+      display: flex;
+      align-items: center;
+    }
+
+    .docs-info-label {
+      background: #f1f6fb;
+      color: #5b7288;
+      font-size: 0.82rem;
+      font-weight: 700;
+      border-right: 1px solid var(--docs-line);
+    }
+
+    .docs-info-value {
+      color: #21364d;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      background: #fff;
+    }
+
+    .docs-swagger-wrap {
+      padding: 1rem;
+      background: linear-gradient(180deg, #f7fbff 0%, #f1f6fc 100%);
+    }
+
+    .docs-notes {
+      margin: 0 1rem 1rem;
+      padding: 0.9rem 1rem;
+      border: 1px solid #dbe6f1;
+      border-radius: 0.8rem;
+      background: #fff;
+      color: #51677d;
+      line-height: 1.6;
+      font-size: 0.9rem;
+    }
+
+    .docs-notes strong {
+      color: #1d446b;
+    }
+
+    .is-hidden {
+      display: none !important;
+    }
+
+    .docs-landing {
+      padding: 1.5rem;
+      background: linear-gradient(180deg, #fafdff 0%, #f5f9fd 100%);
+    }
+
+    .docs-landing-hero {
+      padding: 1.4rem;
+      border: 1px solid #d9e5f1;
+      border-radius: 1rem;
+      background: #fff;
+    }
+
+    .docs-landing-title {
+      margin: 0;
+      font-size: 1.7rem;
+      font-weight: 800;
+      color: #173552;
+    }
+
+    .docs-landing-description {
+      margin: 0.75rem 0 0;
+      max-width: 760px;
+      color: #617487;
+      line-height: 1.7;
+    }
+
+    .docs-landing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.9rem;
+      margin-top: 1rem;
+    }
+
+    .docs-landing-card {
+      padding: 1rem;
+      border: 1px solid #dbe6f0;
+      border-radius: 0.9rem;
+      background: #fff;
+    }
+
+    .docs-landing-card strong {
+      display: block;
+      color: #1c3f63;
+      margin-bottom: 0.35rem;
+    }
+
+    .docs-landing-card span {
+      color: #688095;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    .docs-frame {
+      width: 100%;
+      min-height: calc(100vh - 20rem);
+      border: 1px solid #d8e4f0;
+      border-radius: 0.85rem;
+      background: #fff;
+    }
+
+    @media (max-width: 991.98px) {
+      .docs-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .docs-sidebar {
+        position: static;
+      }
+
+      .docs-info-table {
+        grid-template-columns: 1fr;
+      }
+
+      .docs-info-row {
+        grid-template-columns: 120px minmax(0, 1fr);
+        border-right: 0;
+      }
+
+      .docs-frame {
+        min-height: 70vh;
+      }
+
+      .docs-landing-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 575.98px) {
+      .docs-layout {
+        padding: 0.75rem;
+      }
+
+      .docs-banner,
+      .docs-swagger-wrap,
+      .docs-sidebar {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+
+      .docs-info-row {
+        grid-template-columns: 1fr;
+      }
+
+      .docs-info-label {
+        border-right: 0;
+        border-bottom: 1px solid var(--docs-line);
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block body %}
+  <div class="docs-layout">
+    <aside class="docs-panel docs-sidebar">
+      <span class="docs-kicker">API Explorer</span>
+      <h1 class="docs-title">조달 API 문서</h1>
+      <p class="docs-subtitle">
+        좌측 트리에서 서비스 메뉴를 선택하면 우측에 기존 Swagger UI를 그대로 표시합니다.
+      </p>
+
+      <div class="docs-sidebar-meta">
+        <div class="docs-meta-item">
+          <span class="docs-meta-label">기관</span>
+          <span class="docs-meta-value">조달청 나라장터 OpenAPI</span>
+        </div>
+        <div class="docs-meta-item">
+          <span class="docs-meta-label">탐색 방식</span>
+          <span class="docs-meta-value">트리 메뉴 + 서비스별 Swagger UI</span>
+        </div>
+      </div>
+
+      <div class="docs-tree">
+        {% for group in docs_nav_groups %}
+          <details class="docs-tree-group" open>
+            <summary>
+              <span class="docs-tree-toggle">&gt;</span>
+              <span>{{ group["group"] }}</span>
+            </summary>
+
+            <ul class="docs-tree-list">
+              {% for item in group["items"] %}
+                <li>
+                  <button
+                    type="button"
+                    class="docs-tree-button{% if item.id == selected_doc_id %} is-active{% endif %}"
+                    data-doc-id="{{ item.id }}"
+                    data-doc-group="{{ item.group }}"
+                    data-doc-label="{{ item.label }}"
+                    data-doc-description="{{ item.description }}"
+                    data-doc-url="/docs/swagger?doc={{ item.id }}"
+                    data-openapi-url="{{ item.openapi_path }}"
+                    data-provider="{{ item.provider }}"
+                    data-category="{{ item.category }}"
+                    data-protocol="{{ item.protocol }}"
+                    data-version-label="{{ item.version_label }}"
+                    data-audience="{{ item.audience }}"
+                    data-updated-at="{{ item.updated_at }}"
+                    data-base-url="{{ item.base_url }}"
+                    data-notes="{{ item.notes }}"
+                  >
+                    <span class="docs-tree-label">{{ item.label }}</span>
+                    <span class="docs-tree-description">{{ item.description }}</span>
+                  </button>
+                </li>
+              {% endfor %}
+            </ul>
+          </details>
+        {% endfor %}
+      </div>
+    </aside>
+
+    <main class="docs-panel docs-content">
+      <section id="docs-landing" class="docs-landing{% if selected_doc %} is-hidden{% endif %}">
+        <div class="docs-landing-hero">
+          <h2 class="docs-landing-title">조달 API 서비스 문서 포털</h2>
+          <p class="docs-landing-description">
+            좌측 트리에서 원하는 서비스를 선택하면 해당 서비스 전용 Swagger UI가 열립니다. 서비스별로 필터링된 OpenAPI 문서와 운영 메타 정보를 함께 확인할 수 있습니다.
+          </p>
+
+          <div class="docs-landing-grid">
+            <div class="docs-landing-card">
+              <strong>서비스별 문서 분리</strong>
+              <span>입찰공고, 작업이력, 관리자동기화를 각각 독립된 문서로 탐색합니다.</span>
+            </div>
+            <div class="docs-landing-card">
+              <strong>즉시 테스트</strong>
+              <span>선택 즉시 우측에 Swagger UI가 열려 API 스펙과 요청 예시를 바로 확인할 수 있습니다.</span>
+            </div>
+            <div class="docs-landing-card">
+              <strong>운영 메타 제공</strong>
+              <span>기준경로, 버전, 대상 사용자, 인증 성격 같은 정보를 상단에서 빠르게 파악합니다.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div id="docs-detail-shell" class="{% if not selected_doc %}is-hidden{% endif %}">
+      <div id="docs-content-header" class="docs-content-header">
+        <div class="docs-banner">
+          <div class="docs-breadcrumb">
+            <span>조달 API</span>
+            <span>&gt;</span>
+            <strong id="docs-group-name">{{ docs_group_name or '서비스 선택 전' }}</strong>
+          </div>
+
+          <div class="docs-banner-top">
+            <div>
+              <h2 id="docs-current-title" class="docs-content-title">{{ selected_doc_label or '서비스를 선택하세요' }}</h2>
+              <p id="docs-current-description" class="docs-content-description">{{ selected_doc_description or '좌측 트리 메뉴에서 서비스를 선택하면 필터링된 Swagger UI와 서비스 정보를 확인할 수 있습니다.' }}</p>
+            </div>
+
+            <div class="docs-banner-actions">
+              <span class="docs-pill">REST</span>
+              <span id="docs-version-pill" class="docs-pill">{{ selected_doc.version_label if selected_doc else 'OpenAPI 3.x' }}</span>
+              <a id="docs-openapi-link" class="docs-link{% if not selected_doc %} is-hidden{% endif %}" href="{{ selected_doc.openapi_path if selected_doc else '#' }}" target="_blank" rel="noreferrer">OpenAPI JSON</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="docs-info-table">
+          <div class="docs-info-row">
+            <div class="docs-info-label">제공기관</div>
+            <div id="docs-provider" class="docs-info-value">{{ selected_doc.provider if selected_doc else '-' }}</div>
+          </div>
+          <div class="docs-info-row">
+            <div class="docs-info-label">서비스명</div>
+            <div id="docs-service-name" class="docs-info-value">{{ selected_doc_label or '-' }}</div>
+          </div>
+          <div class="docs-info-row">
+            <div class="docs-info-label">서비스분류</div>
+            <div id="docs-category" class="docs-info-value">{{ selected_doc.category if selected_doc else '-' }}</div>
+          </div>
+          <div class="docs-info-row">
+            <div class="docs-info-label">지원형식</div>
+            <div id="docs-protocol" class="docs-info-value">{{ selected_doc.protocol if selected_doc else '-' }}</div>
+          </div>
+          <div class="docs-info-row">
+            <div class="docs-info-label">버전정보</div>
+            <div id="docs-version-label" class="docs-info-value">{{ selected_doc.version_label if selected_doc else '-' }}</div>
+          </div>
+          <div class="docs-info-row">
+            <div class="docs-info-label">대상사용자</div>
+            <div id="docs-audience" class="docs-info-value">{{ selected_doc.audience if selected_doc else '-' }}</div>
+          </div>
+          <div class="docs-info-row">
+            <div class="docs-info-label">기준경로</div>
+            <div id="docs-base-url" class="docs-info-value">{{ selected_doc.base_url if selected_doc else '-' }}</div>
+          </div>
+          <div class="docs-info-row">
+            <div class="docs-info-label">갱신일</div>
+            <div id="docs-updated-at" class="docs-info-value">{{ selected_doc.updated_at if selected_doc else '-' }}</div>
+          </div>
+          <div class="docs-info-row">
+            <div class="docs-info-label">설명</div>
+            <div id="docs-service-description" class="docs-info-value">{{ selected_doc_description or '-' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="docs-notes" class="docs-notes{% if not selected_doc %} is-hidden{% endif %}">
+        <strong>이용안내</strong>
+        <span>{{ selected_doc.notes if selected_doc else '' }}</span>
+      </div>
+
+      <div id="docs-swagger-wrap" class="docs-swagger-wrap{% if not selected_doc %} is-hidden{% endif %}">
+        <iframe
+          id="docs-swagger-frame"
+          class="docs-frame"
+          title="Swagger UI"
+          src="{{ swagger_embed_url or 'about:blank' }}"
+        ></iframe>
+      </div>
+      </div>
+    </main>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const buttons = Array.from(document.querySelectorAll("[data-doc-id]"))
+      const titleEl = document.getElementById("docs-current-title")
+      const descriptionEl = document.getElementById("docs-current-description")
+      const groupNameEl = document.getElementById("docs-group-name")
+      const versionPillEl = document.getElementById("docs-version-pill")
+      const landingEl = document.getElementById("docs-landing")
+      const detailShellEl = document.getElementById("docs-detail-shell")
+      const providerEl = document.getElementById("docs-provider")
+      const serviceNameEl = document.getElementById("docs-service-name")
+      const categoryEl = document.getElementById("docs-category")
+      const protocolEl = document.getElementById("docs-protocol")
+      const versionLabelEl = document.getElementById("docs-version-label")
+      const audienceEl = document.getElementById("docs-audience")
+      const baseUrlEl = document.getElementById("docs-base-url")
+      const updatedAtEl = document.getElementById("docs-updated-at")
+      const serviceDescriptionEl = document.getElementById("docs-service-description")
+      const notesEl = document.getElementById("docs-notes")
+      const swaggerWrapEl = document.getElementById("docs-swagger-wrap")
+      const frameEl = document.getElementById("docs-swagger-frame")
+      const openapiLinkEl = document.getElementById("docs-openapi-link")
+
+      function updateQuery(docId, mode) {
+        const url = new URL(window.location.href)
+        if (docId) {
+          url.searchParams.set("doc", docId)
+        } else {
+          url.searchParams.delete("doc")
+        }
+
+        const state = { doc: docId }
+
+        if (mode === "push") {
+          window.history.pushState(state, "", url)
+          return
+        }
+
+        window.history.replaceState(state, "", url)
+      }
+
+      function showLanding(historyMode) {
+        buttons.forEach(function (item) {
+          item.classList.remove("is-active")
+        })
+
+        landingEl.classList.remove("is-hidden")
+        detailShellEl.classList.add("is-hidden")
+        notesEl.classList.add("is-hidden")
+        swaggerWrapEl.classList.add("is-hidden")
+        frameEl.src = "about:blank"
+
+        if (historyMode) {
+          updateQuery("", historyMode)
+        }
+      }
+
+      function setActive(button, options) {
+        const nextOptions = options || {}
+
+        buttons.forEach(function (item) {
+          item.classList.toggle("is-active", item === button)
+        })
+
+        landingEl.classList.add("is-hidden")
+        detailShellEl.classList.remove("is-hidden")
+        notesEl.classList.remove("is-hidden")
+        swaggerWrapEl.classList.remove("is-hidden")
+        groupNameEl.textContent = button.dataset.docGroup || "조달 API"
+        titleEl.textContent = button.dataset.docLabel || "Swagger UI"
+        descriptionEl.textContent = button.dataset.docDescription || ""
+        versionPillEl.textContent = button.dataset.versionLabel || "OpenAPI"
+        providerEl.textContent = button.dataset.provider || "-"
+        serviceNameEl.textContent = button.dataset.docLabel || "Swagger UI"
+        categoryEl.textContent = button.dataset.category || "-"
+        protocolEl.textContent = button.dataset.protocol || "-"
+        versionLabelEl.textContent = button.dataset.versionLabel || "-"
+        audienceEl.textContent = button.dataset.audience || "-"
+        baseUrlEl.textContent = button.dataset.baseUrl || "-"
+        updatedAtEl.textContent = button.dataset.updatedAt || "-"
+        serviceDescriptionEl.textContent = button.dataset.docDescription || ""
+        notesEl.innerHTML = "<strong>이용안내</strong> <span>" + (button.dataset.notes || "") + "</span>"
+        frameEl.src = button.dataset.docUrl || frameEl.src
+        openapiLinkEl.href = button.dataset.openapiUrl || openapiLinkEl.href
+        openapiLinkEl.classList.remove("is-hidden")
+
+        if (nextOptions.historyMode) {
+          updateQuery(button.dataset.docId || "", nextOptions.historyMode)
+        }
+      }
+
+      buttons.forEach(function (button) {
+        button.addEventListener("click", function () {
+          setActive(button, { historyMode: "push" })
+        })
+      })
+
+      function findButtonByDocId(docId) {
+        return buttons.find(function (button) {
+          return button.dataset.docId === docId
+        })
+      }
+
+      function syncFromLocation(historyMode) {
+        const params = new URLSearchParams(window.location.search)
+        const requestedDocId = params.get("doc")
+        const matchedButton = findButtonByDocId(requestedDocId)
+
+        if (matchedButton) {
+          setActive(matchedButton, { historyMode: historyMode })
+          return
+        }
+
+        showLanding(historyMode)
+      }
+
+      syncFromLocation("replace")
+
+      window.addEventListener("popstate", function () {
+        syncFromLocation(null)
+      })
+    })
+  </script>
+{% endblock %}

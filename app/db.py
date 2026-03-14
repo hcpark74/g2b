@@ -13,6 +13,11 @@ LEGACY_SQLITE_COLUMN_MIGRATIONS: dict[str, dict[str, str]] = {
         "parent_bid_id": "TEXT",
         "version_reason": "TEXT",
     },
+    "bid_version_changes": {
+        "change_data_div_name": "TEXT",
+        "rbid_no": "TEXT",
+        "license_limit_code_list_raw": "TEXT",
+    },
     "bid_details": {
         "detail_url": "TEXT",
         "detail_hash": "TEXT",

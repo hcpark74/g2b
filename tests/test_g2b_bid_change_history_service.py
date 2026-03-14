@@ -39,9 +39,12 @@ def test_sync_change_history_persists_bid_version_changes() -> None:
                 {
                     "bidNtceNo": "R26BK10000001",
                     "bidNtceOrd": "1",
+                    "chgDataDivNm": "입찰공고",
+                    "rbidNo": "000",
+                    "lcnsLmtCdRgstList": "[전기공사업/0001]",
                     "chgItemNm": "공고명",
-                    "chgBfCn": "원공고명",
-                    "chgAfCn": "정정공고명",
+                    "bfchgVal": "원공고명",
+                    "afchgVal": "정정공고명",
                     "chgDt": "2026-03-14 09:10:00",
                 }
             ]
@@ -60,6 +63,9 @@ def test_sync_change_history_persists_bid_version_changes() -> None:
     assert result.fetched_item_count == 1
     assert len(rows) == 1
     assert rows[0].change_item_name == "공고명"
+    assert rows[0].change_data_div_name == "입찰공고"
+    assert rows[0].rbid_no == "000"
+    assert rows[0].license_limit_code_list_raw == "[전기공사업/0001]"
     assert rows[0].before_value == "원공고명"
     assert rows[0].after_value == "정정공고명"
     assert rows[0].source_api_name == "getBidPblancListInfoChgHstryServc"
@@ -89,9 +95,12 @@ def test_sync_change_history_cli_records_completed_log(monkeypatch) -> None:
                 {
                     "bidNtceNo": "R26BK10000002",
                     "bidNtceOrd": "0",
+                    "chgDataDivNm": "입찰공고",
+                    "rbidNo": "000",
+                    "lcnsLmtCdRgstList": "[정보통신공사업/0036]",
                     "chgItemNm": "입찰마감일",
-                    "chgBfCn": "2026-03-20",
-                    "chgAfCn": "2026-03-22",
+                    "bfchgVal": "2026-03-20",
+                    "afchgVal": "2026-03-22",
                 }
             ]
 
@@ -124,3 +133,6 @@ def test_sync_change_history_cli_records_completed_log(monkeypatch) -> None:
     assert logs[0].target == "R26BK10000002-000"
     assert logs[0].message == "processed 1 bids, fetched 1 items"
     assert len(rows) == 1
+    assert rows[0].change_data_div_name == "입찰공고"
+    assert rows[0].rbid_no == "000"
+    assert rows[0].license_limit_code_list_raw == "[정보통신공사업/0036]"

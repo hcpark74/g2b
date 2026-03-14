@@ -140,19 +140,21 @@ def test_sync_bid_notices_sets_version_normalization_fields() -> None:
                     "bidNtceNo": "R26BK00000777",
                     "bidNtceOrd": "0",
                     "bidNtceNm": "원공고",
+                    "ntceKindNm": "등록공고",
                 },
                 {
                     "bidNtceNo": "R26BK00000777",
                     "bidNtceOrd": "1",
                     "bidNtceNm": "정정공고",
-                    "chgRsn": "마감일 정정",
+                    "ntceKindNm": "변경공고",
+                    "chgNtceRsn": "마감일 정정",
                 },
                 {
                     "bidNtceNo": "R26BK00000777",
                     "bidNtceOrd": "2",
                     "bidNtceNm": "취소공고",
-                    "bidNtceCnclYn": "Y",
-                    "bidNtceCnclRsn": "사업 취소",
+                    "ntceKindNm": "취소공고",
+                    "chgNtceRsn": "사업 취소",
                 },
             ]
         }
@@ -188,6 +190,41 @@ def test_sync_bid_notices_sets_version_normalization_fields() -> None:
     assert cancellation.is_latest_version is True
     assert cancellation.is_effective_version is False
     assert cancellation.version_reason == "사업 취소"
+
+
+def test_sync_bid_notices_classifies_rebid_from_notice_kind() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+    client = FakeBidPublicInfoClient(
+        {
+            "getBidPblancListInfoThng": [
+                {
+                    "bidNtceNo": "R26BK00000888",
+                    "bidNtceOrd": "1",
+                    "bidNtceNm": "재공고 테스트",
+                    "ntceKindNm": "재공고",
+                    "reNtceYn": "Y",
+                    "chgNtceRsn": "유찰로 인한 재공고",
+                }
+            ]
+        }
+    )
+
+    with Session(engine) as session:
+        service = G2BBidPublicInfoSyncService(session=session, client=client)
+        service.sync_bid_notices(
+            inqry_bgn_dt="202603130000",
+            inqry_end_dt="202603132359",
+            operations=("getBidPblancListInfoThng",),
+        )
+
+    with Session(engine) as session:
+        rebid = session.get(Bid, "R26BK00000888-001")
+
+    assert rebid is not None
+    assert rebid.notice_version_type == "rebid"
+    assert rebid.is_effective_version is True
+    assert rebid.version_reason == "유찰로 인한 재공고"
 
 
 def test_sync_cli_records_completed_operation_log(monkeypatch) -> None:

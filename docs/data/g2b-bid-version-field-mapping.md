@@ -15,6 +15,11 @@
 - `bidNtceNm` -> `bids.title`
 - `bidNtceDtlUrl` -> `bid_details.detail_url`
 
+참고 문서:
+
+- `docs/reference/g2b/조달청_OpenAPI참고자료_나라장터_입찰공고정보서비스_1.1.pdf`
+- `docs/reference/g2b/조달청_OpenAPI참고자료_나라장터_공공데이터개방표준서비스_1.1.pdf`
+
 현재 한계:
 
 - 취소공고를 실제 API 필드로 판별하지 못한다.
@@ -67,6 +72,16 @@
 
 ### 4.2 버전 유형 분류
 
+입찰공고정보서비스에서 확인된 실제 후보 필드:
+
+- `ntceKindNm`: 공고종류명. `등록공고`, `변경공고`, `취소공고`, `재공고` 구분
+- `chgNtceRsn`: 변경공고사유. 변경공고일 경우 변경 사유, 취소일 경우 취소공고사유
+- `reNtceYn`: 재공고 여부 (`Y/N`)
+
+공공데이터개방표준서비스에서 확인된 대응 필드:
+
+- `bidNtceSttusNm`: 입찰공고상태명. `일반공고`, `긴급공고`, `정정(또는 연기)공고`, `재공고입찰`, `취소공고`
+
 후보 정규화 필드:
 
 - `notice_version_type`
@@ -77,15 +92,17 @@
 
 권장 판정 순서:
 
-1. API 응답에 취소 여부/취소 구분 필드가 있으면 `cancellation`
-2. 그 외 `bidNtceOrd > 최소차수`면 `revision`
-3. 그 외 최초 차수면 `original`
-4. 확신할 수 없으면 `unknown`
+1. `ntceKindNm == "취소공고"` 또는 공공데이터 표준 응답의 `bidNtceSttusNm == "취소공고"`면 `cancellation`
+2. `ntceKindNm == "변경공고"` 또는 공공데이터 표준 응답의 `bidNtceSttusNm`가 정정/연기공고 계열이면 `revision`
+3. `bidNtceOrd > 최소차수`면 `revision` 후보로 본다.
+4. 최초 차수이며 상태 필드가 등록공고 계열이면 `original`
+5. 확신할 수 없으면 `unknown`
 
 중요:
 
-- 실제 응답 샘플을 받아 취소 관련 필드명을 먼저 확정해야 한다.
-- 현재 설계는 `bidNtceOrd`만으로 취소를 알 수 없다는 전제를 둔다.
+- 실제 입찰공고정보서비스에서는 `ntceKindNm`와 `chgNtceRsn`가 핵심 기준이다.
+- `bidNtceOrd`만으로 취소 여부를 알 수 없으므로 상태 필드가 우선이다.
+- `reNtceYn`는 재공고 여부만 나타내므로 취소공고 판별 필드로 쓰면 안 된다.
 
 ### 4.3 최신 유효 차수 계산
 
@@ -102,14 +119,19 @@
 
 ### 4.4 변경이력 API 매핑
 
-변경이력 API 공통 필드 후보:
+변경이력 API에서 확인된 실제 응답 필드:
 
+- `bsnsDivNm`
+- `chgDataDivNm`
 - `bidNtceNo`
 - `bidNtceOrd`
+- `bidClsfcNo`
+- `rbidNo`
 - `chgItemNm`
-- 변경 전 값 필드
-- 변경 후 값 필드
-- 변경 시각 필드
+- `bfchgVal`
+- `afchgVal`
+- `chgDt`
+- `lcnsLmtCdRgstList`
 
 권장 저장 대상:
 
@@ -117,10 +139,13 @@
   - `bid_id`
   - `bid_no`
   - `bid_seq`
+  - `change_data_div_name`
   - `change_item_name`
   - `before_value`
   - `after_value`
   - `changed_at`
+  - `rbid_no`
+  - `license_limit_code_list_raw`
   - `source_api_name`
   - `raw_data`
 
@@ -139,6 +164,12 @@ UI 활용:
 - 기본 목록 응답에서 취소/정정 관련 후보 필드 추출
 - `Bid` 정규화 필드에 값 저장
 - `bid_detail.raw_api_data`에만 두지 말고 화면/조회용 필드로 승격
+
+현재 우선 반영 추천 필드:
+
+- `ntceKindNm` -> `notice_version_type`
+- `chgNtceRsn` -> `version_reason`
+- `reNtceYn` -> 별도 정규화 여부 검토 (`is_rebid` 후보)
 
 현재 참고 위치:
 
@@ -173,6 +204,16 @@ UI 활용:
 - `getBidPblancListInfoChgHstry*` 수집
 - `bid_version_changes` 적재
 - history/timeline 렌더링 데이터 제공
+
+실제 1차 매핑 기준:
+
+- `chgItemNm` -> `change_item_name`
+- `bfchgVal` -> `before_value`
+- `afchgVal` -> `after_value`
+- `chgDt` -> `changed_at`
+- `chgDataDivNm` -> `change_data_div_name`
+- `rbidNo` -> `rbid_no`
+- `lcnsLmtCdRgstList` -> 후속 정규화 필드 후보
 
 ## 6. 매핑 우선순위
 
@@ -220,6 +261,6 @@ UI 활용:
 
 ## 9. 권장 다음 작업
 
-1. 실제 G2B 응답 샘플 3종 확보: 최초공고, 정정공고, 취소공고
-2. `Bid` 모델에 버전 정규화 필드 추가 마이그레이션 설계
-3. `getBidPblancListInfoChgHstry*` 연동 초안 구현
+1. `ntceKindNm`, `chgNtceRsn`, `chgItemNm`, `bfchgVal`, `afchgVal`를 기준 필드로 고정
+2. `Bid` 모델 정규화 필드를 실제 필드 우선 로직으로 채운다.
+3. `bid_version_changes`에 `chgDataDivNm`, `rbidNo` 확장 여부를 결정한다.

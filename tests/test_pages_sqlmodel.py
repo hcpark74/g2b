@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.models import Bid, BidDetail, ContractProcessIntegration, SyncJobLog
-from tests.bid_version_fixtures import seed_bid_version_chain
+from tests.bid_version_fixtures import seed_bid_version_chain, seed_rebid_bid
 
 
 def _reload_module(name: str):
@@ -390,6 +390,7 @@ def test_sqlmodel_drawer_shows_version_badges_and_history(
     assert "공고 차수 상태" in response.text
     assert "취소 공고 게시" in response.text
     assert "공고상태" in response.text
+    assert "데이터구분 입찰공고 / 재입찰번호 000" in response.text
     assert "정정공고" in response.text
     assert 'class="selected-row fw-semibold"' in response.text
     assert "최신 유효 차수 보기" in response.text
@@ -427,6 +428,37 @@ def test_sqlmodel_timeline_partial_shows_revision_or_cancellation_event(
     assert "공고 버전" in response.text
     assert "취소 공고 게시" in response.text
     assert "공고상태" in response.text
+    assert "데이터구분 입찰공고" in response.text
+    assert "재입찰번호 000" in response.text
+
+
+def test_sqlmodel_drawer_shows_rebid_label(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "rebid-drawer.db"
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("BID_DATA_BACKEND", "sqlmodel")
+    monkeypatch.setenv("DEBUG", "false")
+
+    db_module = _reload_module("app.db")
+    _reload_module("app.models")
+    db_module.init_db()
+
+    with Session(db_module.engine) as session:
+        rebid_id = seed_rebid_bid(session, bid_no="R26BK90000555")
+
+    main_module = _reload_module("app.main")
+    with TestClient(main_module.app) as client:
+        response = client.get(f"/partials/bids/{rebid_id}/drawer")
+
+    assert response.status_code == 200
+    assert "재공고" in response.text
+    assert (
+        "현재 보고 있는 공고는 재공고 차수입니다. 이전 유찰 이력과 재공고 사유를 함께 확인하세요."
+        in response.text
+    )
+    assert "재공고 게시" in response.text
 
 
 def test_auto_backend_prefers_seeded_sqlmodel_data(

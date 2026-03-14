@@ -148,10 +148,13 @@ def test_init_db_creates_bid_version_changes_table(monkeypatch, tmp_path) -> Non
         "bid_id",
         "bid_no",
         "bid_seq",
+        "change_data_div_name",
         "change_item_name",
         "before_value",
         "after_value",
         "changed_at",
+        "rbid_no",
+        "license_limit_code_list_raw",
         "source_api_name",
         "raw_data",
     } <= columns

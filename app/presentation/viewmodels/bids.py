@@ -38,6 +38,7 @@ class BidHistoryItemVM(BaseModel):
     item: str
     before: str
     after: str
+    context: str = ""
 
 
 class BidVersionItemVM(BaseModel):

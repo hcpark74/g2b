@@ -13,7 +13,10 @@
       {% for item in selected_bid.history %}
         <tr>
           <td>{{ item.changed_at }}</td>
-          <td>{{ item.item }}</td>
+          <td>
+            <div>{{ item.item }}</div>
+            {% if item.context %}<div class="small text-secondary">{{ item.context }}</div>{% endif %}
+          </td>
           <td>{{ item.before }}</td>
           <td>{{ item.after }}</td>
         </tr>

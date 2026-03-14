@@ -321,6 +321,15 @@ class SqlModelBidRepository(BidRepository):
         return effective.bid_id == bid.bid_id
 
     def _version_label(self, bid: Bid, versions: list[Bid]) -> str:
+        version_type = (bid.notice_version_type or "").strip().lower()
+        if version_type == "cancellation":
+            return "취소공고"
+        if version_type == "rebid":
+            return "재공고"
+        if version_type == "revision":
+            return "정정공고"
+        if version_type == "original":
+            return "최초공고"
         if self._is_non_effective_version(bid):
             return "취소공고"
         if len(versions) == 1:
@@ -335,13 +344,18 @@ class SqlModelBidRepository(BidRepository):
             return "danger"
         if self._is_latest_effective_version(bid, versions):
             return "success"
+        if label == "재공고":
+            return "primary"
         if label == "정정공고":
             return "warning"
         return "secondary"
 
     def _version_summary(self, bid: Bid, versions: list[Bid]) -> str:
+        label = self._version_label(bid, versions)
         if self._is_non_effective_version(bid):
             return "현재 보고 있는 공고는 취소공고입니다. 검토 시 최신 유효 차수를 함께 확인하세요."
+        if label == "재공고":
+            return "현재 보고 있는 공고는 재공고 차수입니다. 이전 유찰 이력과 재공고 사유를 함께 확인하세요."
         if self._is_latest_effective_version(bid, versions):
             return "현재 보고 있는 공고는 검토 기준이 되는 최신 유효 차수입니다."
         return "현재 보고 있는 공고는 이전 차수입니다. 최신 유효 차수와 변경 내용을 비교해 확인하세요."
@@ -858,7 +872,7 @@ class SqlModelBidRepository(BidRepository):
                 "number": bid.bid_id,
                 "date": self._format_datetime(bid.posted_at),
                 "meta": (
-                    f"{'취소 공고 게시' if label == '취소공고' else '정정 공고 게시'}"
+                    f"{'취소 공고 게시' if label == '취소공고' else ('재공고 게시' if label == '재공고' else '정정 공고 게시')}"
                     + (f" · {change_summary}" if change_summary else "")
                 ),
             }
@@ -947,7 +961,7 @@ class SqlModelBidRepository(BidRepository):
             {
                 "changed_at": self._format_datetime(bid.posted_at),
                 "item": "공고 차수 상태",
-                "before": "최초공고" if label == "정정공고" else "정정공고",
+                "before": "최초공고" if label in {"정정공고", "재공고"} else "정정공고",
                 "after": label,
             }
         ]
@@ -961,6 +975,7 @@ class SqlModelBidRepository(BidRepository):
                 "item": change.change_item_name,
                 "before": change.before_value or "-",
                 "after": change.after_value or "-",
+                "context": self._version_change_context(change),
             }
             for change in version_changes
         ]
@@ -968,11 +983,25 @@ class SqlModelBidRepository(BidRepository):
     def _version_change_summary(self, version_changes: list[BidVersionChange]) -> str:
         if not version_changes:
             return ""
-        names = [
+        names = []
+        first = version_changes[0]
+        if first.change_data_div_name:
+            names.append(f"데이터구분 {first.change_data_div_name}")
+        if first.rbid_no:
+            names.append(f"재입찰번호 {first.rbid_no}")
+        names.extend(
             change.change_item_name
             for change in version_changes[:3]
             if change.change_item_name
-        ]
+        )
         if not names:
             return ""
         return ", ".join(names)
+
+    def _version_change_context(self, change: BidVersionChange) -> str:
+        parts: list[str] = []
+        if change.change_data_div_name:
+            parts.append(f"데이터구분 {change.change_data_div_name}")
+        if change.rbid_no:
+            parts.append(f"재입찰번호 {change.rbid_no}")
+        return " / ".join(parts)

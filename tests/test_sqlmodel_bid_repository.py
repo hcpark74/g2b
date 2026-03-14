@@ -14,7 +14,7 @@ from app.models import (
     TimelineStageSnapshot,
 )
 from app.repositories.sqlmodel_bid_repository import SqlModelBidRepository
-from tests.bid_version_fixtures import seed_bid_version_chain
+from tests.bid_version_fixtures import seed_bid_version_chain, seed_rebid_bid
 
 
 def _make_repository() -> tuple[Session, SqlModelBidRepository]:
@@ -402,11 +402,34 @@ def test_get_bid_includes_version_history_metadata() -> None:
         assert bid["version_history"][1]["is_latest_effective"] is True
         assert bid["version_history"][1]["bid_id"] == ids["revision_bid_id"]
         assert bid["timeline"][0]["stage"] == "공고 버전"
-        assert bid["timeline"][0]["meta"] == "취소 공고 게시 · 공고상태"
+        assert (
+            bid["timeline"][0]["meta"]
+            == "취소 공고 게시 · 데이터구분 입찰공고, 재입찰번호 000, 공고상태"
+        )
         assert bid["history"][0]["item"] == "공고 차수 상태"
         assert bid["history"][0]["after"] == "취소공고"
         assert bid["history"][1]["item"] == "공고상태"
         assert bid["history"][1]["before"] == "정정공고"
+        assert bid["history"][1]["context"] == "데이터구분 입찰공고 / 재입찰번호 000"
+    finally:
+        session.close()
+
+
+def test_get_bid_labels_rebid_notice_from_normalized_field() -> None:
+    session, repository = _make_repository()
+    try:
+        rebid_id = seed_rebid_bid(session)
+
+        bid = repository.get_bid(rebid_id)
+
+        assert bid["version_label"] == "재공고"
+        assert bid["version_variant"] == "success"
+        assert (
+            bid["version_summary"]
+            == "현재 보고 있는 공고는 재공고 차수입니다. 이전 유찰 이력과 재공고 사유를 함께 확인하세요."
+        )
+        assert bid["history"][0]["after"] == "재공고"
+        assert bid["timeline"][0]["meta"] == "재공고 게시"
     finally:
         session.close()
 

@@ -213,6 +213,14 @@ class G2BBidPublicInfoSyncService:
         )
 
     def _notice_version_type(self, item: dict[str, Any]) -> str:
+        notice_kind = self._optional_str(item.get("ntceKindNm"))
+        if notice_kind == "취소공고":
+            return "cancellation"
+        if notice_kind == "재공고":
+            return "rebid"
+        if notice_kind == "변경공고":
+            return "revision"
+
         if self._is_cancellation_notice(item):
             return "cancellation"
 
@@ -242,6 +250,7 @@ class G2BBidPublicInfoSyncService:
 
     def _version_reason(self, item: dict[str, Any]) -> str | None:
         for key in (
+            "chgNtceRsn",
             "bidNtceCnclRsn",
             "ntceRsn",
             "chgRsn",

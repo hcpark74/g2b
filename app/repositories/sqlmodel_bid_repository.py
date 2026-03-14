@@ -1004,4 +1004,6 @@ class SqlModelBidRepository(BidRepository):
             parts.append(f"데이터구분 {change.change_data_div_name}")
         if change.rbid_no:
             parts.append(f"재입찰번호 {change.rbid_no}")
+        if change.license_limit_code_list_raw:
+            parts.append(f"면허코드목록 {change.license_limit_code_list_raw}")
         return " / ".join(parts)

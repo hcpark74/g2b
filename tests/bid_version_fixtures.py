@@ -69,6 +69,7 @@ def seed_bid_version_chain(
             after_value="통합 유지보수 용역 정정공고",
             changed_at="2026-03-12 10:30",
             rbid_no="000",
+            license_limit_code_list_raw="[전기공사업/0037]",
             source_api_name="getBidPblancListInfoChgHstryServc",
         )
     )
@@ -122,6 +123,7 @@ def seed_bid_version_chain(
             after_value="취소공고",
             changed_at="2026-03-13 08:45",
             rbid_no="000",
+            license_limit_code_list_raw="[정보통신공사업/0036]",
             source_api_name="getBidPblancListInfoChgHstryServc",
         )
     )

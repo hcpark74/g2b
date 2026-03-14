@@ -390,7 +390,10 @@ def test_sqlmodel_drawer_shows_version_badges_and_history(
     assert "공고 차수 상태" in response.text
     assert "취소 공고 게시" in response.text
     assert "공고상태" in response.text
-    assert "데이터구분 입찰공고 / 재입찰번호 000" in response.text
+    assert (
+        "데이터구분 입찰공고 / 재입찰번호 000 / 면허코드목록 [정보통신공사업/0036]"
+        in response.text
+    )
     assert "정정공고" in response.text
     assert 'class="selected-row fw-semibold"' in response.text
     assert "최신 유효 차수 보기" in response.text

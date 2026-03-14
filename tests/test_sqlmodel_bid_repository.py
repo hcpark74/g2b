@@ -410,7 +410,10 @@ def test_get_bid_includes_version_history_metadata() -> None:
         assert bid["history"][0]["after"] == "취소공고"
         assert bid["history"][1]["item"] == "공고상태"
         assert bid["history"][1]["before"] == "정정공고"
-        assert bid["history"][1]["context"] == "데이터구분 입찰공고 / 재입찰번호 000"
+        assert (
+            bid["history"][1]["context"]
+            == "데이터구분 입찰공고 / 재입찰번호 000 / 면허코드목록 [정보통신공사업/0036]"
+        )
     finally:
         session.close()
 

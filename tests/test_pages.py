@@ -36,7 +36,7 @@ def test_bids_page_renders(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert "입찰 공고 목록" in response.text
-    assert "전체 3건" in response.text
+    assert "현재 조건 결과 3건" in response.text
 
 
 def test_bid_drawer_partial_renders(client: TestClient) -> None:

@@ -1,7 +1,49 @@
 <nav aria-label="페이지 이동">
   <ul class="pagination pagination-sm mb-0 justify-content-center">
-    <li class="page-item disabled"><span class="page-link">이전</span></li>
-    <li class="page-item active"><span class="page-link">1</span></li>
-    <li class="page-item disabled"><span class="page-link">다음</span></li>
+    {% set pager = pagination | default({}, true) %}
+    <li class="page-item {% if not pager.has_previous %}disabled{% endif %}">
+      {% if pager.has_previous and pager.previous %}
+        <a
+          class="page-link"
+          href="{{ pager.previous.url }}"
+          hx-get="{{ pager.previous.partial_url }}"
+          hx-target="#bid-table-container"
+          hx-swap="innerHTML"
+          hx-push-url="true"
+        >이전</a>
+      {% else %}
+        <span class="page-link">이전</span>
+      {% endif %}
+    </li>
+    {% for item in pager.pages | default([], true) %}
+      <li class="page-item {% if item.is_current %}active{% endif %}">
+        {% if item.is_current %}
+          <span class="page-link">{{ item.page }}</span>
+        {% else %}
+          <a
+            class="page-link"
+            href="{{ item.url }}"
+            hx-get="{{ item.partial_url }}"
+            hx-target="#bid-table-container"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+          >{{ item.page }}</a>
+        {% endif %}
+      </li>
+    {% endfor %}
+    <li class="page-item {% if not pager.has_next %}disabled{% endif %}">
+      {% if pager.has_next and pager.next %}
+        <a
+          class="page-link"
+          href="{{ pager.next.url }}"
+          hx-get="{{ pager.next.partial_url }}"
+          hx-target="#bid-table-container"
+          hx-swap="innerHTML"
+          hx-push-url="true"
+        >다음</a>
+      {% else %}
+        <span class="page-link">다음</span>
+      {% endif %}
+    </li>
   </ul>
 </nav>

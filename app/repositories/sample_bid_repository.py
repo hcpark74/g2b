@@ -37,7 +37,7 @@ class SampleBidRepository(BidRepository):
         budget_max: int | None = None,
         closed_from: str | None = None,
         closed_to: str | None = None,
-        sort: str = "posted_at",
+        sort: str = "updated_at",
         order: str = "desc",
     ) -> list[dict[str, Any]]:
         bids = [self._with_overrides(item) for item in get_sample_bids()]
@@ -129,7 +129,7 @@ class SampleBidRepository(BidRepository):
         budget_max: int | None = None,
         closed_from: str | None = None,
         closed_to: str | None = None,
-        sort: str = "posted_at",
+        sort: str = "updated_at",
         order: str = "desc",
     ) -> BidListPage:
         items = self.list_bids(
@@ -181,6 +181,15 @@ class SampleBidRepository(BidRepository):
         return value
 
     def _sort_key(self, bid: dict[str, Any], sort: str) -> tuple[Any, str]:
+        if sort == "updated_at":
+            return (
+                self._parse_datetime(
+                    bid.get("last_changed_at")
+                    or bid.get("posted_at")
+                    or bid.get("opened_at")
+                ),
+                str(bid.get("bid_id", "")),
+            )
         if sort == "closed_at":
             return (
                 self._parse_datetime(bid.get("closed_at")),
@@ -189,6 +198,16 @@ class SampleBidRepository(BidRepository):
         if sort == "budget_amount":
             return (
                 self._parse_amount(bid.get("budget_amount")),
+                str(bid.get("bid_id", "")),
+            )
+        if sort == "notice_org":
+            return (
+                str(bid.get("notice_org", "")).lower(),
+                str(bid.get("bid_id", "")),
+            )
+        if sort == "title":
+            return (
+                str(bid.get("title", "")).lower(),
                 str(bid.get("bid_id", "")),
             )
         return (self._parse_datetime(bid.get("posted_at")), str(bid.get("bid_id", "")))

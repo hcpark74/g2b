@@ -12,47 +12,93 @@
 
   <div class="card app-card shadow-sm border-0 mt-3 mb-3">
     <div class="card-body app-subtle rounded">
-      <div class="row g-2">
-        <div class="col-md-3"><input class="form-control" placeholder="사업명, 기관명"></div>
-        <div class="col-md-2"><select class="form-select"><option>전체 단계</option></select></div>
-        <div class="col-md-2"><select class="form-select"><option>전체 업무구분</option></select></div>
-        <div class="col-md-3"><input class="form-control" placeholder="기간"></div>
-        <div class="col-md-2 d-grid"><button class="btn btn-primary">검색</button></div>
-      </div>
+      <form method="get" action="/prespecs">
+        <div class="row g-2">
+          <div class="col-md-3">
+            <input
+              class="form-control"
+              name="q"
+              value="{{ prespec_filters.q }}"
+              placeholder="사업명, 기관명"
+            >
+          </div>
+          <div class="col-md-2">
+            <select class="form-select" name="stage">
+              <option value="">전체 단계</option>
+              {% for option in prespec_stage_options %}
+                <option value="{{ option }}" {% if prespec_filters.stage == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <select class="form-select" name="business_type">
+              <option value="">전체 업무구분</option>
+              {% for option in prespec_business_type_options %}
+                <option value="{{ option }}" {% if prespec_filters.business_type == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <input class="form-control" type="date" name="date_from" value="{{ prespec_filters.date_from }}">
+          </div>
+          <div class="col-md-2">
+            <input class="form-control" type="date" name="date_to" value="{{ prespec_filters.date_to }}">
+          </div>
+          <div class="col-md-1 d-grid">
+            <button class="btn btn-primary" type="submit">검색</button>
+          </div>
+        </div>
+      </form>
     </div>
   </div>
 
   <div class="app-surface rounded shadow-sm p-2 border">
-    <div class="table-responsive">
-      <table class="table table-sm app-table mb-0 align-middle">
-        <thead>
-          <tr>
-            <th>단계구분</th>
-            <th>업무구분</th>
-            <th>사업명</th>
-            <th>연결키</th>
-            <th>기관</th>
-            <th>수요기관</th>
-            <th>일자</th>
-            <th>본공고 연결</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in items %}
-            <tr>
-              <td>{{ item.stage }}</td>
-              <td>{{ item.business_type }}</td>
-              <td><a href="#" class="text-decoration-none app-link">{{ item.title }}</a></td>
-              <td>{{ item.key }}</td>
-              <td>{{ item.org }}</td>
-              <td>{{ item.demand_org }}</td>
-              <td>{{ item.date }}</td>
-              <td>{{ item.linked_bid }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="d-flex justify-content-between align-items-center px-2 py-2 text-secondary small">
+      <span>현재 조건 결과 {{ items|length }}건</span>
     </div>
+    {% if items %}
+      <div class="table-responsive">
+        <table class="table table-sm app-table mb-0 align-middle">
+          <thead>
+            <tr>
+              <th>단계구분</th>
+              <th>업무구분</th>
+              <th>사업명</th>
+              <th>연결키</th>
+              <th>기관</th>
+              <th>수요기관</th>
+              <th>일자</th>
+              <th>본공고 연결</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+              <tr>
+                <td>{{ item.stage }}</td>
+                <td>{{ item.business_type }}</td>
+                <td>
+                  <a href="{% if item.linked_bid_id %}/bids?q={{ item.linked_bid_id }}{% else %}/bids?q={{ item.key }}{% endif %}" class="text-decoration-none app-link">{{ item.title }}</a>
+                </td>
+                <td>{{ item.key }}</td>
+                <td>{{ item.org }}</td>
+                <td>{{ item.demand_org }}</td>
+                <td>{{ item.date }}</td>
+                <td>
+                  <div class="d-flex flex-column align-items-start gap-1">
+                    {% with label=item.linked_bid, variant=item.linked_bid_variant %}{% include "partials/shared/_status_badge.html" %}{% endwith %}
+                    {% if item.linked_bid_id %}
+                      <a href="/bids?q={{ item.linked_bid_id }}" class="small text-decoration-none app-link">본공고 보기</a>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="text-center text-secondary py-4">표시할 사전 탐색 항목이 없습니다.</div>
+    {% endif %}
   </div>
 {% endblock %}
 

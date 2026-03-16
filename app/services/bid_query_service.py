@@ -20,7 +20,7 @@ class BidQueryService:
         budget_max: int | None = None,
         closed_from: str | None = None,
         closed_to: str | None = None,
-        sort: str = "posted_at",
+        sort: str = "updated_at",
         order: str = "desc",
     ) -> list[dict[str, Any]]:
         return self.repository.list_bids(
@@ -53,7 +53,7 @@ class BidQueryService:
         budget_max: int | None = None,
         closed_from: str | None = None,
         closed_to: str | None = None,
-        sort: str = "posted_at",
+        sort: str = "updated_at",
         order: str = "desc",
     ) -> BidListPage:
         return self.repository.list_bids_page(

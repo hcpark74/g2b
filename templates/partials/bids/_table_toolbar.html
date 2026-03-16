@@ -1,19 +1,36 @@
-<div class="d-flex justify-content-between align-items-center app-surface rounded shadow-sm p-2 border sticky-toolbar">
-  <div class="d-flex align-items-center gap-2">
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 app-surface rounded shadow-sm p-2 border sticky-toolbar">
+  <div class="d-flex align-items-center gap-2 flex-wrap">
     <span class="section-title">입찰공고목록</span>
-    <span class="toolbar-chip">전체 {{ page_vm.total_count | default(0) }}건</span>
+    <span class="toolbar-chip">현재 조건 결과 {{ page_vm.total_count | default(0) }}건</span>
   </div>
-  <div class="d-flex gap-2 align-items-center">
-    <select class="form-select form-select-sm" style="width: 110px;">
-      <option>최신순</option>
-      <option>마감임박순</option>
-      <option>예산순</option>
+  <form
+    class="d-flex gap-2 align-items-center flex-wrap"
+    action="/bids"
+    method="get"
+    hx-get="/partials/bids/table"
+    hx-target="#bid-table-container"
+    hx-swap="innerHTML"
+    hx-push-url="true"
+  >
+    <input type="hidden" name="q" value="{{ search_query | default('', true) }}">
+    <input type="hidden" name="status" value="{{ status_filter | default('', true) }}">
+    <input type="hidden" name="org" value="{{ org_filter | default('', true) }}">
+    <input type="hidden" name="closed_from" value="{{ closed_from | default('', true) }}">
+    <input type="hidden" name="closed_to" value="{{ closed_to | default('', true) }}">
+    <input type="hidden" name="page" value="1">
+    {% if favorites_only %}<input type="hidden" name="favorites" value="1">{% endif %}
+    {% if include_versions %}<input type="hidden" name="include_versions" value="1">{% endif %}
+    <select class="form-select form-select-sm" name="sort" style="width: 150px;">
+      {% for sort_key, sort_label in sort_options | default([]) %}
+        <option value="{{ sort_key }}" {% if sort_value == sort_key %}selected{% endif %}>{{ sort_label }}</option>
+      {% endfor %}
     </select>
-    <select class="form-select form-select-sm" style="width: 90px;">
-      <option>20</option>
-      <option>50</option>
-      <option>100</option>
+    <select class="form-select form-select-sm" name="page_size" style="width: 90px;">
+      {% for option in page_size_options | default([25, 50, 100]) %}
+        <option value="{{ option }}" {% if page_size == option %}selected{% endif %}>{{ option }}</option>
+      {% endfor %}
     </select>
-    <button class="btn btn-success btn-sm">엑셀 다운로드</button>
-  </div>
+    <button class="btn btn-outline-secondary btn-sm" type="submit">적용</button>
+    <button class="btn btn-success btn-sm" type="button">엑셀 다운로드</button>
+  </form>
 </div>

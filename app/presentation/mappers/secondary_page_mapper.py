@@ -6,7 +6,16 @@ from app.presentation.viewmodels.prespecs import PrespecItemVM, PrespecsPageVM
 from app.presentation.viewmodels.results import ResultItemVM, ResultsPageVM
 
 
-def build_prespecs_page_vm(items: list[dict[str, str]], last_synced_at: str) -> PrespecsPageVM:
+def build_prespecs_page_vm(
+    items: list[dict[str, str]], last_synced_at: str
+) -> PrespecsPageVM:
+    order_plan_count = sum(1 for item in items if item.get("stage") == "발주계획")
+    prespec_count = sum(1 for item in items if item.get("stage") == "사전규격")
+    procurement_request_count = sum(
+        1 for item in items if item.get("stage") == "조달요청"
+    )
+    linked_bid_count = sum(1 for item in items if item.get("linked_bid") == "연결됨")
+
     return PrespecsPageVM(
         title="사전 탐색",
         description="발주계획, 사전규격, 조달요청 화면이 여기에 배치됩니다.",
@@ -15,17 +24,19 @@ def build_prespecs_page_vm(items: list[dict[str, str]], last_synced_at: str) -> 
         summary=_build_summary(
             last_synced_at,
             [
-                DashboardStatVM(label="발주계획", value="14"),
-                DashboardStatVM(label="사전규격", value="9"),
-                DashboardStatVM(label="조달요청", value="6"),
-                DashboardStatVM(label="본공고 연결", value="5"),
+                DashboardStatVM(label="발주계획", value=str(order_plan_count)),
+                DashboardStatVM(label="사전규격", value=str(prespec_count)),
+                DashboardStatVM(label="조달요청", value=str(procurement_request_count)),
+                DashboardStatVM(label="본공고 연결", value=str(linked_bid_count)),
             ],
         ),
         items=[PrespecItemVM(**item) for item in items],
     )
 
 
-def build_results_page_vm(items: list[dict[str, str]], last_synced_at: str) -> ResultsPageVM:
+def build_results_page_vm(
+    items: list[dict[str, str]], last_synced_at: str
+) -> ResultsPageVM:
     return ResultsPageVM(
         title="사후 분석",
         description="낙찰 및 계약 결과 분석 화면이 여기에 배치됩니다.",
@@ -44,7 +55,9 @@ def build_results_page_vm(items: list[dict[str, str]], last_synced_at: str) -> R
     )
 
 
-def build_favorites_page_vm(items: list[BidListItemVM], last_synced_at: str) -> FavoritesPageVM:
+def build_favorites_page_vm(
+    items: list[BidListItemVM], last_synced_at: str
+) -> FavoritesPageVM:
     return FavoritesPageVM(
         title="관심 공고",
         description="즐겨찾기한 공고 목록 화면이 여기에 배치됩니다.",
@@ -63,11 +76,17 @@ def build_favorites_page_vm(items: list[BidListItemVM], last_synced_at: str) -> 
     )
 
 
-def build_operations_page_vm(items: list[dict[str, str]], last_synced_at: str) -> OperationsPageVM:
+def build_operations_page_vm(
+    items: list[dict[str, str]], last_synced_at: str
+) -> OperationsPageVM:
     success_count = sum(1 for item in items if item.get("status") == "completed")
     failed_count = sum(1 for item in items if item.get("status") == "failed")
     running_count = sum(1 for item in items if item.get("status") == "running")
-    last_execution = items[0]["finished_at"] if items and items[0].get("finished_at") not in {None, "-"} else "-"
+    last_execution = (
+        items[0]["finished_at"]
+        if items and items[0].get("finished_at") not in {None, "-"}
+        else "-"
+    )
 
     return OperationsPageVM(
         title="운영 현황",
@@ -87,5 +106,7 @@ def build_operations_page_vm(items: list[dict[str, str]], last_synced_at: str) -
     )
 
 
-def _build_summary(last_synced_at: str, items: list[DashboardStatVM]) -> DashboardSummaryVM:
+def _build_summary(
+    last_synced_at: str, items: list[DashboardStatVM]
+) -> DashboardSummaryVM:
     return DashboardSummaryVM(items=items, last_synced_at=last_synced_at)

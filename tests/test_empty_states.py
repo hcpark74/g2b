@@ -39,6 +39,15 @@ def test_bids_page_shows_empty_state_when_no_bids(
     assert "표시할 공고가 없습니다." in response.text
 
 
+def test_bids_page_shows_filtered_empty_state_when_filters_applied(
+    empty_sqlmodel_client: TestClient,
+) -> None:
+    response = empty_sqlmodel_client.get("/bids?q=없는공고")
+
+    assert response.status_code == 200
+    assert "조건에 맞는 공고가 없습니다. 필터를 조정해보세요." in response.text
+
+
 def test_favorites_page_shows_empty_state_when_no_favorites(
     empty_sqlmodel_client: TestClient,
 ) -> None:
@@ -55,3 +64,21 @@ def test_operations_page_shows_empty_state_when_no_logs(
 
     assert response.status_code == 200
     assert "표시할 작업 이력이 없습니다." in response.text
+
+
+def test_prespecs_page_shows_empty_state_when_no_items(
+    empty_sqlmodel_client: TestClient,
+) -> None:
+    response = empty_sqlmodel_client.get("/prespecs")
+
+    assert response.status_code == 200
+    assert "표시할 사전 탐색 항목이 없습니다." in response.text
+
+
+def test_prespecs_page_shows_empty_state_when_filters_remove_all_items(
+    empty_sqlmodel_client: TestClient,
+) -> None:
+    response = empty_sqlmodel_client.get("/prespecs?q=없는항목&stage=사전규격")
+
+    assert response.status_code == 200
+    assert "표시할 사전 탐색 항목이 없습니다." in response.text

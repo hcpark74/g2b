@@ -12,6 +12,8 @@ class PrespecItemVM(BaseModel):
     demand_org: str
     date: str
     linked_bid: str
+    linked_bid_variant: str = "secondary"
+    linked_bid_id: str = ""
 
 
 class PrespecsPageVM(BaseModel):

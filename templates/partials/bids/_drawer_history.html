@@ -1,6 +1,12 @@
-<div class="small text-secondary mb-2">변경 이력</div>
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <div>
+    <div class="small text-secondary">변경 이력</div>
+    <div class="fw-semibold small">비교가 필요한 핵심 변경만 요약해서 보여줍니다.</div>
+  </div>
+  <span class="toolbar-chip">총 {{ selected_bid.history | length }}건</span>
+</div>
 <div class="table-responsive">
-  <table class="table table-sm align-middle">
+  <table class="table table-sm align-middle app-table">
     <thead>
       <tr>
         <th>변경일시</th>
@@ -14,11 +20,11 @@
         <tr>
           <td>{{ item.changed_at }}</td>
           <td>
-            <div>{{ item.item }}</div>
+            <div class="fw-semibold">{{ item.item }}</div>
             {% if item.context %}<div class="small text-secondary">{{ item.context }}</div>{% endif %}
           </td>
-          <td>{{ item.before }}</td>
-          <td>{{ item.after }}</td>
+          <td><span class="text-secondary">{{ item.before }}</span></td>
+          <td><span class="fw-semibold">{{ item.after }}</span></td>
         </tr>
       {% else %}
         <tr>

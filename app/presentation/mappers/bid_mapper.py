@@ -132,13 +132,21 @@ def build_bid_drawer_vm(raw_bid: dict[str, Any]) -> BidDrawerVM:
 
 
 def build_bids_page_vm(
-    raw_bids: list[dict[str, Any]], last_synced_at: str, active_nav: str = "bids"
+    raw_bids: list[dict[str, Any]],
+    last_synced_at: str,
+    active_nav: str = "bids",
+    total_count: int | None = None,
+    page: int = 1,
+    page_size: int = 25,
+    row_offset: int = 0,
 ) -> BidsPageVM:
     list_items = [
-        build_bid_list_item_vm(raw_bid, index + 1)
+        build_bid_list_item_vm(raw_bid, row_offset + index + 1)
         for index, raw_bid in enumerate(raw_bids)
     ]
     selected_bid = build_bid_drawer_vm(raw_bids[0]) if raw_bids else None
+    resolved_total_count = total_count if total_count is not None else len(list_items)
+    total_pages = max(1, (resolved_total_count + page_size - 1) // page_size)
 
     return BidsPageVM(
         summary=DashboardSummaryVM(
@@ -152,7 +160,10 @@ def build_bids_page_vm(
         ),
         bids=list_items,
         selected_bid=selected_bid,
-        total_count=len(list_items),
+        total_count=resolved_total_count,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
         active_nav=active_nav,
     )
 

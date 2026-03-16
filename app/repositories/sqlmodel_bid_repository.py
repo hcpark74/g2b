@@ -38,7 +38,7 @@ class SqlModelBidRepository(BidRepository):
         budget_max: int | None = None,
         closed_from: str | None = None,
         closed_to: str | None = None,
-        sort: str = "posted_at",
+        sort: str = "updated_at",
         order: str = "desc",
     ) -> list[dict[str, Any]]:
         statement = self._list_statement(
@@ -76,7 +76,7 @@ class SqlModelBidRepository(BidRepository):
         budget_max: int | None = None,
         closed_from: str | None = None,
         closed_to: str | None = None,
-        sort: str = "posted_at",
+        sort: str = "updated_at",
         order: str = "desc",
     ) -> BidListPage:
         statement = self._list_statement(
@@ -134,7 +134,7 @@ class SqlModelBidRepository(BidRepository):
         budget_max: int | None = None,
         closed_from: str | None = None,
         closed_to: str | None = None,
-        sort: str = "posted_at",
+        sort: str = "updated_at",
         order: str = "desc",
     ):
         statement = select(Bid)
@@ -148,6 +148,7 @@ class SqlModelBidRepository(BidRepository):
         budget_amount_col = cast(Any, getattr(Bid, "budget_amount"))
         closed_at_col = cast(Any, getattr(Bid, "closed_at"))
         posted_at_col = cast(Any, getattr(Bid, "posted_at"))
+        last_changed_at_col = cast(Any, getattr(Bid, "last_changed_at"))
         category_col = cast(Any, getattr(Bid, "category"))
         normalized_query = (search_query or "").strip().lower()
         normalized_status = (status or "").strip().lower()
@@ -262,11 +263,17 @@ class SqlModelBidRepository(BidRepository):
         if closed_to_dt is not None:
             statement = statement.where(closed_at_col <= closed_to_dt)  # type: ignore[operator]
 
-        sort_column = posted_at_col
+        sort_column = last_changed_at_col
         if sort == "closed_at":
             sort_column = closed_at_col
         elif sort == "budget_amount":
             sort_column = budget_amount_col
+        elif sort == "posted_at":
+            sort_column = posted_at_col
+        elif sort == "notice_org":
+            sort_column = notice_org_col
+        elif sort == "title":
+            sort_column = title_col
 
         if order == "asc":
             statement = statement.order_by(sort_column.asc(), bid_id_col.asc())  # type: ignore[attr-defined]
@@ -363,7 +370,12 @@ class SqlModelBidRepository(BidRepository):
     def _parse_filter_datetime(self, value: str | None) -> datetime | None:
         if not value:
             return None
-        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        for fmt in (
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M",
+        ):
             try:
                 return datetime.strptime(value, fmt)
             except ValueError:

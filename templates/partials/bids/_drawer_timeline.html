@@ -1,34 +1,34 @@
-<div class="small text-secondary mb-2">타임라인</div>
-<div class="row g-3">
-  <div class="col-4">
-    <div class="position-relative ps-4">
-      <div style="position:absolute; left:9px; top:10px; bottom:10px; width:2px; background:#d9e2ec;"></div>
-      {% for item in selected_bid.timeline %}
-        <div class="position-relative mb-3">
-          <div
-            style="position:absolute; left:-18px; top:8px; width:14px; height:14px; border-radius:999px; background:{% if item.status == '완료' %}#198754{% elif item.status == '진행중' %}#3d6fd6{% elif item.status == '미도달' %}#94a3b8{% elif item.status == '미체결' %}#f59e0b{% else %}#dc3545{% endif %}; border:2px solid #fff; box-shadow:0 0 0 1px #d9e2ec;"
-          ></div>
-          <div class="fw-semibold small">{{ item.stage }}</div>
-          <div class="text-secondary small">{{ item.status }}</div>
-        </div>
-      {% endfor %}
-    </div>
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <div>
+    <div class="small text-secondary">타임라인</div>
+    <div class="fw-semibold small">계약 진행과 버전 이벤트를 시간순으로 보여줍니다.</div>
   </div>
-  <div class="col-8">
-    <div class="d-flex flex-column gap-2">
-      {% for item in selected_bid.timeline %}
-        <div class="card app-card shadow-sm">
-          <div class="card-body py-2 px-3">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <div class="fw-semibold small">{{ item.stage }}</div>
-              <span class="badge text-bg-{% if item.status == '완료' %}success{% elif item.status == '진행중' %}primary{% elif item.status == '미도달' %}secondary{% elif item.status == '미체결' %}warning{% else %}danger{% endif %}">{{ item.status }}</span>
+  <span class="toolbar-chip">총 {{ selected_bid.timeline | length }}건</span>
+</div>
+
+<div class="d-flex flex-column gap-3">
+  {% for item in selected_bid.timeline %}
+    <div class="card app-card shadow-sm border-0">
+      <div class="card-body py-3 px-3">
+        <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+          <div>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+              <span class="badge text-bg-{{ item.status_variant }}">{{ item.status }}</span>
+              <span class="fw-semibold">{{ item.stage }}</span>
             </div>
-            <div class="small mb-1"><span class="text-secondary">번호</span> {{ item.number }}</div>
-            <div class="small mb-1"><span class="text-secondary">일시</span> {{ item.date }}</div>
-            <div class="small text-secondary">{{ item.meta }}</div>
+            {% if item.meta %}<div class="small text-secondary">{{ item.meta }}</div>{% endif %}
+          </div>
+          <div class="text-end small text-secondary">
+            <div>{{ item.date }}</div>
+            {% if item.number and item.number != '-' %}<div>{{ item.number }}</div>{% endif %}
           </div>
         </div>
-      {% endfor %}
+        <div class="progress" style="height: 6px; background: #e9eef5;">
+          <div class="progress-bar bg-{% if item.status_variant == 'secondary' %}secondary{% elif item.status_variant == 'dark' %}dark{% else %}{{ item.status_variant }}{% endif %}" role="progressbar" style="width: {% if item.status == '완료' %}100{% elif item.status == '진행중' %}66{% elif item.status == '미체결' %}85{% elif item.status == '미도달' %}30{% else %}100{% endif %}%"></div>
+        </div>
+      </div>
     </div>
-  </div>
+  {% else %}
+    <div class="text-center text-secondary py-4">타임라인 데이터가 없습니다.</div>
+  {% endfor %}
 </div>

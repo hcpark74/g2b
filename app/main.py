@@ -6,6 +6,7 @@ from io import StringIO
 import json
 from pathlib import Path
 from typing import Literal, cast
+from urllib.parse import parse_qs, urlencode
 
 from fastapi import BackgroundTasks, FastAPI, Query, Request
 from fastapi.exceptions import HTTPException
@@ -253,6 +254,18 @@ DOCS_NAV_ITEMS = [
 page_query_service = PageQueryService(repository=SamplePageRepository())
 operation_query_service = OperationQueryService(repository=SampleOperationRepository())
 
+BID_SORT_OPTIONS = [
+    ("updated_at", "업데이트 최신순"),
+    ("closed_at_asc", "마감일 빠른순"),
+    ("closed_at_desc", "마감일 늦은순"),
+    ("posted_at", "공고일 최신순"),
+    ("notice_org", "기관명"),
+    ("title", "입찰명"),
+]
+BID_PAGE_SIZE_OPTIONS = [25, 50, 100]
+DEFAULT_BIDS_SORT = "updated_at"
+DEFAULT_BIDS_PAGE_SIZE = 25
+
 
 def list_raw_bids(
     *,
@@ -266,7 +279,7 @@ def list_raw_bids(
     budget_max: int | None = None,
     closed_from: str | None = None,
     closed_to: str | None = None,
-    sort: str = "posted_at",
+    sort: str = "updated_at",
     order: str = "desc",
 ) -> list[dict[str, object]]:
     if settings.bid_data_backend == "sample":
@@ -334,7 +347,7 @@ def list_raw_bids_page(
     budget_max: int | None = None,
     closed_from: str | None = None,
     closed_to: str | None = None,
-    sort: str = "posted_at",
+    sort: str = "updated_at",
     order: str = "desc",
 ):
     if settings.bid_data_backend == "sample":
@@ -486,33 +499,257 @@ def get_operations_last_synced_at(items: list[dict[str, str]]) -> str:
     return max(timestamps)
 
 
+def _normalize_positive_int(value: str | None, default: int) -> int:
+    try:
+        parsed = int(str(value or "").strip())
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _normalize_bids_page_size(value: str | None) -> int:
+    parsed = _normalize_positive_int(value, DEFAULT_BIDS_PAGE_SIZE)
+    return parsed if parsed in BID_PAGE_SIZE_OPTIONS else DEFAULT_BIDS_PAGE_SIZE
+
+
+def _normalize_bids_sort(value: str | None) -> tuple[str, str, str]:
+    normalized = (value or "").strip() or DEFAULT_BIDS_SORT
+    sort_mapping = {
+        "updated_at": ("updated_at", "desc"),
+        "closed_at_asc": ("closed_at", "asc"),
+        "closed_at_desc": ("closed_at", "desc"),
+        "posted_at": ("posted_at", "desc"),
+        "notice_org": ("notice_org", "asc"),
+        "title": ("title", "asc"),
+    }
+    repository_sort, repository_order = sort_mapping.get(
+        normalized, sort_mapping[DEFAULT_BIDS_SORT]
+    )
+    if normalized not in sort_mapping:
+        normalized = DEFAULT_BIDS_SORT
+    return normalized, repository_sort, repository_order
+
+
+def _build_bids_query_params(
+    *,
+    search_query: str,
+    status: str,
+    favorites_only: bool,
+    include_versions: bool,
+    org: str,
+    closed_from: str,
+    closed_to: str,
+    sort: str,
+    page: int,
+    page_size: int,
+) -> dict[str, str]:
+    params: dict[str, str] = {
+        "sort": sort,
+        "page": str(page),
+        "page_size": str(page_size),
+    }
+    if search_query:
+        params["q"] = search_query
+    if status:
+        params["status"] = status
+    if favorites_only:
+        params["favorites"] = "1"
+    if include_versions:
+        params["include_versions"] = "1"
+    if org:
+        params["org"] = org
+    if closed_from:
+        params["closed_from"] = closed_from
+    if closed_to:
+        params["closed_to"] = closed_to
+    return params
+
+
+def _build_url_with_query(path: str, params: dict[str, str]) -> str:
+    query = urlencode(params)
+    return f"{path}?{query}" if query else path
+
+
+def _extract_bids_request_state(source: object) -> dict[str, object]:
+    getter = getattr(source, "get", None)
+    if getter is None:
+        return {}
+    favorites_value = getter("favorites")
+    include_versions_value = getter("include_versions")
+    return {
+        "search_query": getter("q"),
+        "status": getter("status"),
+        "favorites_only": favorites_value in {"1", "true", "on"},
+        "include_versions": include_versions_value in {"1", "true", "on"},
+        "org": getter("org"),
+        "closed_from": getter("closed_from"),
+        "closed_to": getter("closed_to"),
+        "sort": getter("sort"),
+        "page": _normalize_positive_int(getter("page"), 1),
+        "page_size": _normalize_bids_page_size(getter("page_size")),
+    }
+
+
+async def _parse_request_form_data(request: Request) -> dict[str, str]:
+    raw_body = (await request.body()).decode("utf-8")
+    parsed = parse_qs(raw_body, keep_blank_values=True)
+    return {key: values[-1] for key, values in parsed.items() if values}
+
+
+def _build_bids_pagination(
+    *,
+    search_query: str,
+    status: str,
+    favorites_only: bool,
+    include_versions: bool,
+    org: str,
+    closed_from: str,
+    closed_to: str,
+    sort: str,
+    page: int,
+    page_size: int,
+    total_count: int,
+) -> dict[str, object]:
+    total_pages = (
+        max(1, (total_count + page_size - 1) // page_size) if total_count else 1
+    )
+    current_page = min(max(page, 1), total_pages)
+
+    def build_page_link(target_page: int) -> dict[str, object]:
+        params = _build_bids_query_params(
+            search_query=search_query,
+            status=status,
+            favorites_only=favorites_only,
+            include_versions=include_versions,
+            org=org,
+            closed_from=closed_from,
+            closed_to=closed_to,
+            sort=sort,
+            page=target_page,
+            page_size=page_size,
+        )
+        return {
+            "page": target_page,
+            "url": _build_url_with_query("/bids", params),
+            "partial_url": _build_url_with_query("/partials/bids/table", params),
+            "is_current": target_page == current_page,
+        }
+
+    start_page = max(1, current_page - 2)
+    end_page = min(total_pages, start_page + 4)
+    start_page = max(1, end_page - 4)
+    pages = [
+        build_page_link(target_page) for target_page in range(start_page, end_page + 1)
+    ]
+
+    return {
+        "current_page": current_page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "total_count": total_count,
+        "has_previous": current_page > 1,
+        "has_next": current_page < total_pages,
+        "previous": build_page_link(current_page - 1) if current_page > 1 else None,
+        "next": build_page_link(current_page + 1)
+        if current_page < total_pages
+        else None,
+        "pages": pages,
+    }
+
+
 def get_bids_page_context(
     search_query: str | None = None,
     status: str | None = None,
     favorites_only: bool = False,
     include_versions: bool = False,
+    org: str | None = None,
+    closed_from: str | None = None,
+    closed_to: str | None = None,
+    sort: str | None = None,
+    page: int = 1,
+    page_size: int = DEFAULT_BIDS_PAGE_SIZE,
 ) -> dict[str, object]:
-    raw_bids = list_raw_bids(
+    normalized_search_query = (search_query or "").strip()
+    normalized_status = (status or "").strip()
+    normalized_org = (org or "").strip()
+    normalized_closed_from = (closed_from or "").strip()
+    normalized_closed_to = (closed_to or "").strip()
+    normalized_page = _normalize_positive_int(str(page), 1)
+    normalized_page_size = _normalize_bids_page_size(str(page_size))
+    normalized_sort, repository_sort, repository_order = _normalize_bids_sort(sort)
+
+    raw_page = list_raw_bids_page(
+        page=normalized_page,
+        page_size=normalized_page_size,
         search_query=search_query,
         status=status,
         favorites_only=favorites_only,
         include_versions=include_versions,
+        org=org,
+        closed_from=closed_from,
+        closed_to=closed_to,
+        sort=repository_sort,
+        order=repository_order,
     )
+    raw_bids = raw_page.items
     last_synced_at = get_last_synced_at(raw_bids)
     page_vm = build_bids_page_vm(
         raw_bids,
         last_synced_at=last_synced_at,
         active_nav="bids",
+        total_count=raw_page.total,
+        page=normalized_page,
+        page_size=normalized_page_size,
+        row_offset=(normalized_page - 1) * normalized_page_size,
+    )
+    pagination = _build_bids_pagination(
+        search_query=normalized_search_query,
+        status=normalized_status,
+        favorites_only=favorites_only,
+        include_versions=include_versions,
+        org=normalized_org,
+        closed_from=normalized_closed_from,
+        closed_to=normalized_closed_to,
+        sort=normalized_sort,
+        page=normalized_page,
+        page_size=normalized_page_size,
+        total_count=raw_page.total,
+    )
+    is_filter_active = any(
+        (
+            normalized_search_query,
+            normalized_status,
+            normalized_org,
+            normalized_closed_from,
+            normalized_closed_to,
+            favorites_only,
+            include_versions,
+        )
     )
     return {
         "page_vm": page_vm,
         "last_synced_at": page_vm.summary.last_synced_at,
         "active_nav": page_vm.active_nav,
         "selected_bid": page_vm.selected_bid,
-        "search_query": (search_query or "").strip(),
-        "status_filter": (status or "").strip(),
+        "search_query": normalized_search_query,
+        "status_filter": normalized_status,
         "favorites_only": favorites_only,
         "include_versions": include_versions,
+        "org_filter": normalized_org,
+        "closed_from": normalized_closed_from,
+        "closed_to": normalized_closed_to,
+        "sort_value": normalized_sort,
+        "sort_options": BID_SORT_OPTIONS,
+        "page": pagination["current_page"],
+        "page_size": normalized_page_size,
+        "page_size_options": BID_PAGE_SIZE_OPTIONS,
+        "pagination": pagination,
+        "empty_state_message": (
+            "조건에 맞는 공고가 없습니다. 필터를 조정해보세요."
+            if is_filter_active
+            else "표시할 공고가 없습니다."
+        ),
+        "is_filter_active": is_filter_active,
         "show_version_filter": True,
         "bid_status_options": BID_STATUS_OPTIONS,
     }
@@ -546,8 +783,24 @@ def get_basic_page_context(active_nav: str) -> dict[str, object]:
     }
 
 
-def get_prespecs_page_context() -> dict[str, object]:
-    page_vm = build_prespecs_page_vm(page_query_service.list_prespecs(), LAST_SYNCED_AT)
+def get_prespecs_page_context(
+    *,
+    q: str | None = None,
+    stage: str | None = None,
+    business_type: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> dict[str, object]:
+    page_vm = build_prespecs_page_vm(
+        list_prespec_items(
+            q=q,
+            stage=stage,
+            business_type=business_type,
+            date_from=date_from,
+            date_to=date_to,
+        ),
+        LAST_SYNCED_AT,
+    )
     return {
         "active_nav": page_vm.active_nav,
         "last_synced_at": page_vm.last_synced_at,
@@ -555,7 +808,47 @@ def get_prespecs_page_context() -> dict[str, object]:
         "page_vm": page_vm,
         "summary_stats": page_vm.summary.items,
         "items": page_vm.items,
+        "prespec_filters": {
+            "q": (q or "").strip(),
+            "stage": (stage or "").strip(),
+            "business_type": (business_type or "").strip(),
+            "date_from": (date_from or "").strip(),
+            "date_to": (date_to or "").strip(),
+        },
+        "prespec_stage_options": ["발주계획", "사전규격", "조달요청"],
+        "prespec_business_type_options": ["공사", "물품", "용역"],
     }
+
+
+def list_prespec_items(
+    *,
+    q: str | None = None,
+    stage: str | None = None,
+    business_type: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[dict[str, str]]:
+    if settings.bid_data_backend in {"sqlmodel", "auto"}:
+        with Session(engine) as session:
+            items = PageQueryService(
+                repository=SqlModelPageRepository(session)
+            ).list_prespecs(
+                q=q,
+                stage=stage,
+                business_type=business_type,
+                date_from=date_from,
+                date_to=date_to,
+            )
+        if items or settings.bid_data_backend == "sqlmodel":
+            return items
+
+    return page_query_service.list_prespecs(
+        q=q,
+        stage=stage,
+        business_type=business_type,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
 
 def list_result_items() -> list[dict[str, str]]:
@@ -702,6 +995,163 @@ def set_raw_bid_favorite(bid_id: str, favorite: bool) -> dict[str, object]:
     return BidQueryService(repository=SampleBidRepository()).set_bid_favorite(
         bid_id, favorite
     )
+
+
+def _build_bid_drawer_context(
+    bid_id: str, action_feedback: dict[str, str] | None = None
+) -> dict[str, object]:
+    drawer_vm = build_bid_drawer_vm(get_selected_raw_bid(bid_id))
+    return {
+        "selected_bid": drawer_vm,
+        "last_synced_at": LAST_SYNCED_AT,
+        "active_nav": "bids",
+        "bid_status_options": BID_STATUS_OPTIONS,
+        "action_feedback": action_feedback,
+    }
+
+
+def _build_manual_action_feedback(
+    *,
+    title: str,
+    status: str,
+    message: str,
+    operations_job_type: str,
+) -> dict[str, str]:
+    return {
+        "title": title,
+        "variant": "success" if status == "completed" else "danger",
+        "message": message,
+        "operations_url": f"/operations?job_type={operations_job_type}",
+    }
+
+
+def _log_manual_sync_job(
+    *,
+    job_type: str,
+    target: str,
+    status: str,
+    started_at: datetime,
+    message: str,
+) -> None:
+    with Session(engine) as session:
+        log = SyncJobLog(
+            job_type=job_type,
+            target=target,
+            status=status,
+            started_at=started_at,
+            finished_at=datetime.now(),
+            message=message,
+        )
+        session.add(log)
+        session.commit()
+
+
+def _run_manual_bid_action(bid_id: str, action: str) -> dict[str, str]:
+    started_at = datetime.now()
+    target = bid_id
+    action_map = {
+        "detail": ("상세 보강 재실행", "bid_detail_enrichment"),
+        "contract": ("계약과정 재실행", "contract_process_sync"),
+        "crawl": ("크롤링 재실행", "bid_page_crawl"),
+    }
+    action_title, job_type = action_map[action]
+
+    if settings.bid_data_backend == "sample":
+        if action == "detail":
+            message = "processed 1 bids, fetched 1 items"
+        elif action == "contract":
+            message = "processed 1 bids, fetched 1 items"
+        else:
+            message = "processed 1 bids, stored 1 attachments"
+        _log_manual_sync_job(
+            job_type=job_type,
+            target=target,
+            status="completed",
+            started_at=started_at,
+            message=message,
+        )
+        return _build_manual_action_feedback(
+            title=action_title,
+            status="completed",
+            message=message,
+            operations_job_type=job_type,
+        )
+
+    public_client = None
+    contract_client = None
+    crawler = None
+    try:
+        if action == "detail":
+            public_client = G2BBidPublicInfoClient()
+            with Session(engine) as session:
+                result = G2BBidDetailEnrichmentService(
+                    session=session,
+                    client=public_client,
+                ).enrich_bids(
+                    bid_ids=[bid_id],
+                    operations=PHASE2_DETAIL_ENRICHMENT_OPERATIONS,
+                    selection_mode="targeted",
+                    recent_days=7,
+                )
+            message = (
+                f"operations={','.join(PHASE2_DETAIL_ENRICHMENT_OPERATIONS)} "
+                f"selection_mode=targeted processed {len(result.processed_bid_ids)} bids, "
+                f"fetched {result.fetched_item_count} items"
+            )
+        elif action == "contract":
+            contract_client = G2BContractProcessClient()
+            with Session(engine) as session:
+                result = G2BContractProcessService(
+                    session=session,
+                    client=contract_client,
+                ).enrich_timelines(bid_ids=[bid_id])
+            message = (
+                f"processed {len(result.processed_bid_ids)} bids, "
+                f"fetched {result.fetched_item_count} items"
+            )
+        else:
+            crawler = G2BBidPageCrawler()
+            with Session(engine) as session:
+                result = G2BBidCrawlService(
+                    session=session, crawler=crawler
+                ).crawl_bids(bid_ids=[bid_id])
+            message = (
+                f"processed {len(result.processed_bid_ids)} bids, "
+                f"stored {result.attachment_count} attachments"
+            )
+        _log_manual_sync_job(
+            job_type=job_type,
+            target=target,
+            status="completed",
+            started_at=started_at,
+            message=message,
+        )
+        return _build_manual_action_feedback(
+            title=action_title,
+            status="completed",
+            message=message,
+            operations_job_type=job_type,
+        )
+    except Exception as exc:
+        message = build_sync_failure_message(exc)
+        _log_manual_sync_job(
+            job_type=job_type,
+            target=target,
+            status="failed",
+            started_at=started_at,
+            message=message,
+        )
+        return _build_manual_action_feedback(
+            title=action_title,
+            status="failed",
+            message=message,
+            operations_job_type=job_type,
+        )
+    finally:
+        if public_client is not None:
+            public_client.close()
+        if contract_client is not None:
+            contract_client.close()
 
 
 def build_api_error_response(
@@ -1922,6 +2372,12 @@ def bids_page(request: Request):
         "true",
         "on",
     }
+    org = request.query_params.get("org")
+    closed_from = request.query_params.get("closed_from")
+    closed_to = request.query_params.get("closed_to")
+    sort = request.query_params.get("sort")
+    page = _normalize_positive_int(request.query_params.get("page"), 1)
+    page_size = _normalize_bids_page_size(request.query_params.get("page_size"))
     return templates.TemplateResponse(
         request=request,
         name="pages/bids/index.html",
@@ -1930,16 +2386,33 @@ def bids_page(request: Request):
             status=status,
             favorites_only=favorites_only,
             include_versions=include_versions,
+            org=org,
+            closed_from=closed_from,
+            closed_to=closed_to,
+            sort=sort,
+            page=page,
+            page_size=page_size,
         ),
     )
 
 
 @app.get("/prespecs", response_class=HTMLResponse, include_in_schema=False)
 def prespecs_page(request: Request):
+    q = request.query_params.get("q")
+    stage = request.query_params.get("stage")
+    business_type = request.query_params.get("business_type")
+    date_from = request.query_params.get("date_from")
+    date_to = request.query_params.get("date_to")
     return templates.TemplateResponse(
         request=request,
         name="pages/prespecs/index.html",
-        context=get_prespecs_page_context(),
+        context=get_prespecs_page_context(
+            q=q,
+            stage=stage,
+            business_type=business_type,
+            date_from=date_from,
+            date_to=date_to,
+        ),
     )
 
 
@@ -1986,6 +2459,12 @@ def bids_table_partial(request: Request):
         "true",
         "on",
     }
+    org = request.query_params.get("org")
+    closed_from = request.query_params.get("closed_from")
+    closed_to = request.query_params.get("closed_to")
+    sort = request.query_params.get("sort")
+    page = _normalize_positive_int(request.query_params.get("page"), 1)
+    page_size = _normalize_bids_page_size(request.query_params.get("page_size"))
     return templates.TemplateResponse(
         request=request,
         name="partials/bids/_bid_table.html",
@@ -1994,6 +2473,12 @@ def bids_table_partial(request: Request):
             status=status,
             favorites_only=favorites_only,
             include_versions=include_versions,
+            org=org,
+            closed_from=closed_from,
+            closed_to=closed_to,
+            sort=sort,
+            page=page,
+            page_size=page_size,
         ),
     )
 
@@ -2017,15 +2502,10 @@ def favorites_table_partial(request: Request):
     include_in_schema=False,
 )
 def bid_drawer_partial(request: Request, bid_id: str):
-    drawer_vm = build_bid_drawer_vm(get_selected_raw_bid(bid_id))
     return templates.TemplateResponse(
         request=request,
         name="partials/bids/_drawer.html",
-        context={
-            "selected_bid": drawer_vm,
-            "last_synced_at": LAST_SYNCED_AT,
-            "active_nav": "bids",
-        },
+        context=_build_bid_drawer_context(bid_id),
     )
 
 
@@ -2044,4 +2524,133 @@ def bid_timeline_inline_partial(request: Request, bid_id: str):
             "last_synced_at": LAST_SYNCED_AT,
             "active_nav": "bids",
         },
+    )
+
+
+@app.post(
+    "/partials/bids/{bid_id}/favorite-toggle",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+async def bid_favorite_toggle_partial(request: Request, bid_id: str):
+    form = await _parse_request_form_data(request)
+    current_bid = get_selected_raw_bid(bid_id)
+    set_raw_bid_favorite(bid_id, not bool(current_bid.get("favorite", False)))
+    state = _extract_bids_request_state(form)
+    context = get_bids_page_context(
+        search_query=cast(str | None, state.get("search_query")),
+        status=cast(str | None, state.get("status")),
+        favorites_only=cast(bool, state.get("favorites_only", False)),
+        include_versions=cast(bool, state.get("include_versions", False)),
+        org=cast(str | None, state.get("org")),
+        closed_from=cast(str | None, state.get("closed_from")),
+        closed_to=cast(str | None, state.get("closed_to")),
+        sort=cast(str | None, state.get("sort")),
+        page=cast(int, state.get("page", 1)),
+        page_size=cast(int, state.get("page_size", DEFAULT_BIDS_PAGE_SIZE)),
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/bids/_bid_table.html",
+        context=context,
+    )
+
+
+@app.post(
+    "/partials/bids/{bid_id}/status",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+async def bid_status_update_partial(
+    request: Request,
+    bid_id: str,
+):
+    form = await _parse_request_form_data(request)
+    status = form.get("status", "")
+    update_raw_bid_status(bid_id, status)
+    state = _extract_bids_request_state(form)
+    context = get_bids_page_context(
+        search_query=cast(str | None, state.get("search_query")),
+        status=cast(str | None, state.get("status")),
+        favorites_only=cast(bool, state.get("favorites_only", False)),
+        include_versions=cast(bool, state.get("include_versions", False)),
+        org=cast(str | None, state.get("org")),
+        closed_from=cast(str | None, state.get("closed_from")),
+        closed_to=cast(str | None, state.get("closed_to")),
+        sort=cast(str | None, state.get("sort")),
+        page=cast(int, state.get("page", 1)),
+        page_size=cast(int, state.get("page_size", DEFAULT_BIDS_PAGE_SIZE)),
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/bids/_bid_table.html",
+        context=context,
+    )
+
+
+@app.post(
+    "/partials/bids/{bid_id}/drawer/favorite-toggle",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+def bid_drawer_favorite_toggle_partial(request: Request, bid_id: str):
+    current_bid = get_selected_raw_bid(bid_id)
+    updated_bid = set_raw_bid_favorite(
+        bid_id, not bool(current_bid.get("favorite", False))
+    )
+    feedback = {
+        "title": "관심 공고",
+        "variant": "success",
+        "message": (
+            "관심 공고로 등록했습니다."
+            if bool(updated_bid.get("favorite", False))
+            else "관심 공고를 해제했습니다."
+        ),
+        "operations_url": "/favorites",
+    }
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/bids/_drawer.html",
+        context=_build_bid_drawer_context(bid_id, feedback),
+    )
+
+
+@app.post(
+    "/partials/bids/{bid_id}/drawer/status",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+async def bid_drawer_status_update_partial(
+    request: Request,
+    bid_id: str,
+):
+    form = await _parse_request_form_data(request)
+    status = form.get("status", "")
+    updated_bid = update_raw_bid_status(bid_id, status)
+    feedback = {
+        "title": "내부 상태 변경",
+        "variant": "success",
+        "message": f"내부 상태를 {updated_bid.get('status', status)}(으)로 변경했습니다.",
+        "operations_url": "/bids",
+    }
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/bids/_drawer.html",
+        context=_build_bid_drawer_context(bid_id, feedback),
+    )
+
+
+@app.post(
+    "/partials/bids/{bid_id}/drawer/manual-sync/{action}",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+def bid_drawer_manual_sync_partial(request: Request, bid_id: str, action: str):
+    if action not in {"detail", "contract", "crawl"}:
+        raise HTTPException(status_code=404, detail="Manual action not found")
+    feedback = _run_manual_bid_action(bid_id, action)
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/bids/_drawer.html",
+        context=_build_bid_drawer_context(bid_id, feedback),
     )

@@ -25,6 +25,50 @@
     <button class="btn btn-sm btn-outline-secondary">닫기</button>
   </div>
 
+  {% if action_feedback %}
+    <div class="alert alert-{{ action_feedback.variant }} py-2 small" role="alert">
+      <div class="fw-semibold mb-1">{{ action_feedback.title }}</div>
+      <div>{{ action_feedback.message }}</div>
+      {% if action_feedback.operations_url %}
+        <a href="{{ action_feedback.operations_url }}" class="app-link small">작업 이력 보기</a>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if selected_bid is defined and selected_bid %}
+    <div class="app-surface rounded border p-3 mb-3">
+      <div class="small text-secondary mb-2">업무 액션</div>
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+        <button
+          class="btn btn-sm {% if selected_bid.favorite %}btn-warning{% else %}btn-outline-warning{% endif %}"
+          type="button"
+          hx-post="/partials/bids/{{ selected_bid.bid_id }}/drawer/favorite-toggle"
+          hx-target="#bid-drawer-container"
+          hx-swap="innerHTML"
+        >{% if selected_bid.favorite %}관심 해제{% else %}관심 등록{% endif %}</button>
+        <form
+          class="d-flex gap-2 align-items-center flex-wrap"
+          hx-post="/partials/bids/{{ selected_bid.bid_id }}/drawer/status"
+          hx-target="#bid-drawer-container"
+          hx-swap="innerHTML"
+        >
+          <select class="form-select form-select-sm" name="status" style="min-width: 130px;">
+            {% for status_value, status_label in bid_status_options | default([]) %}
+              <option value="{{ status_value }}" {% if selected_bid.status == status_label %}selected{% endif %}>{{ status_label }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-sm btn-outline-secondary" type="submit">상태 변경</button>
+        </form>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-sm btn-outline-primary" type="button" hx-post="/partials/bids/{{ selected_bid.bid_id }}/drawer/manual-sync/detail" hx-target="#bid-drawer-container" hx-swap="innerHTML">상세 재실행</button>
+        <button class="btn btn-sm btn-outline-primary" type="button" hx-post="/partials/bids/{{ selected_bid.bid_id }}/drawer/manual-sync/contract" hx-target="#bid-drawer-container" hx-swap="innerHTML">계약과정 재실행</button>
+        <button class="btn btn-sm btn-outline-primary" type="button" hx-post="/partials/bids/{{ selected_bid.bid_id }}/drawer/manual-sync/crawl" hx-target="#bid-drawer-container" hx-swap="innerHTML">크롤링 재실행</button>
+        <a class="btn btn-sm btn-outline-secondary" href="/operations">운영 이력</a>
+      </div>
+    </div>
+  {% endif %}
+
   <ul class="nav nav-tabs mb-3 drawer-tab" role="tablist">
     <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#drawer-overview" type="button">개요</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#drawer-qualification" type="button">자격/제한</button></li>

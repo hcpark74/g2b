@@ -121,4 +121,7 @@ class BidsPageVM(BaseModel):
     bids: list[BidListItemVM]
     selected_bid: Optional[BidDrawerVM] = None
     total_count: int
+    page: int = 1
+    page_size: int = 25
+    total_pages: int = 1
     active_nav: str = "bids"

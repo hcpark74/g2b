@@ -9,7 +9,10 @@
       hx-swap="innerHTML"
       hx-push-url="true"
     >
-      <div class="col-12 col-md-5 col-xl-4">
+      <input type="hidden" name="sort" value="{{ sort_value | default('updated_at', true) }}">
+      <input type="hidden" name="page" value="1">
+      <input type="hidden" name="page_size" value="{{ page_size | default(25, true) }}">
+      <div class="col-12 col-md-4 col-xl-3">
         <label class="form-label filter-label">키워드</label>
         <input
           class="form-control"
@@ -18,7 +21,16 @@
           value="{{ search_query | default('', true) }}"
         >
       </div>
-      <div class="col-6 col-md-3 col-xl-2">
+      <div class="col-12 col-md-4 col-xl-3">
+        <label class="form-label filter-label">기관</label>
+        <input
+          class="form-control"
+          name="org"
+          placeholder="공고기관, 수요기관"
+          value="{{ org_filter | default('', true) }}"
+        >
+      </div>
+      <div class="col-6 col-md-2 col-xl-2">
         <label class="form-label filter-label">상태</label>
         <select class="form-select" name="status">
           <option value="" {% if not status_filter %}selected{% endif %}>전체</option>
@@ -27,7 +39,15 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-6 col-md-4 col-xl-3 d-flex align-items-end">
+      <div class="col-6 col-md-3 col-xl-2">
+        <label class="form-label filter-label">마감 시작</label>
+        <input class="form-control" type="datetime-local" name="closed_from" value="{{ closed_from | default('', true) }}">
+      </div>
+      <div class="col-6 col-md-3 col-xl-2">
+        <label class="form-label filter-label">마감 종료</label>
+        <input class="form-control" type="datetime-local" name="closed_to" value="{{ closed_to | default('', true) }}">
+      </div>
+      <div class="col-12 col-md-6 col-xl-2 d-flex align-items-end">
         {% if force_favorites_only %}
           <input type="hidden" name="favorites" value="1">
           <span class="badge text-bg-warning-subtle border border-warning-subtle text-warning-emphasis mb-2">관심 공고 전용</span>
@@ -69,12 +89,12 @@
       <div class="col-12 d-flex justify-content-between align-items-center pt-1 small text-muted">
         <span>
           {% if show_version_filter | default(True) %}
-            현재는 키워드, 상태, 관심 공고, 버전 포함 필터를 지원합니다.
+            현재는 키워드, 기관, 상태, 마감 기간, 관심 공고, 버전 포함 필터를 지원합니다.
           {% else %}
             현재는 키워드, 상태 필터를 지원합니다.
           {% endif %}
         </span>
-        {% if search_query or status_filter or favorites_only or include_versions %}
+        {% if search_query or org_filter or status_filter or favorites_only or include_versions or closed_from or closed_to %}
           <span>필터 적용 중</span>
         {% endif %}
       </div>

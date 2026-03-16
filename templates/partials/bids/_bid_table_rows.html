@@ -1,9 +1,37 @@
 {% for bid in page_vm.bids | default([]) %}
   <tr data-bid-row="{{ bid.bid_id }}" class="{% if loop.first %}selected-row{% endif %}" hx-get="/partials/bids/{{ bid.bid_id }}/drawer" hx-target="#bid-drawer-container" hx-swap="innerHTML" style="cursor: pointer;">
-    <td>{{ loop.index }}</td>
-    <td><button class="btn btn-sm btn-outline-warning">{% if bid.favorite %}★{% else %}☆{% endif %}</button></td>
+    <td>{{ bid.row_number }}</td>
+    <td>
+      <button
+        class="btn btn-sm {% if bid.favorite %}btn-warning{% else %}btn-outline-warning{% endif %}"
+        type="button"
+        hx-post="/partials/bids/{{ bid.bid_id }}/favorite-toggle"
+        hx-target="#bid-table-container"
+        hx-swap="innerHTML"
+        hx-push-url="true"
+        hx-include="#filter-panel form [name], #bid-table-container form [name]"
+        hx-on:click="event.stopPropagation()"
+      >{% if bid.favorite %}★{% else %}☆{% endif %}</button>
+    </td>
     <td>{{ bid.business_type }}</td>
-    <td>{% with label=bid.status, variant=bid.status_variant %}{% include "partials/shared/_status_badge.html" %}{% endwith %}</td>
+    <td>
+      <form
+        class="d-flex align-items-center gap-1"
+        hx-post="/partials/bids/{{ bid.bid_id }}/status"
+        hx-target="#bid-table-container"
+        hx-swap="innerHTML"
+        hx-push-url="true"
+        hx-include="#filter-panel form [name], #bid-table-container form [name], this"
+        hx-on:click="event.stopPropagation()"
+      >
+        <select class="form-select form-select-sm" name="status" style="min-width: 110px;">
+          {% for status_value, status_label in bid_status_options | default([]) %}
+            <option value="{{ status_value }}" {% if bid.status == status_label %}selected{% endif %}>{{ status_label }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-sm btn-outline-secondary" type="submit">적용</button>
+      </form>
+    </td>
     <td>
       <div>{{ bid.domain_type }} / {{ bid.notice_type }}</div>
       <div class="mt-1">{% with label=bid.version_label, variant=bid.version_variant %}{% include "partials/shared/_status_badge.html" %}{% endwith %}</div>
@@ -42,6 +70,6 @@
   </tr>
 {% else %}
   <tr>
-    <td colspan="15" class="text-center text-secondary py-4">표시할 공고가 없습니다.</td>
+    <td colspan="15" class="text-center text-secondary py-4">{{ empty_state_message | default('표시할 공고가 없습니다.', true) }}</td>
   </tr>
 {% endfor %}

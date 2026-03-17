@@ -1,11 +1,11 @@
 import csv
 from copy import deepcopy
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import StringIO
 import json
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal, Sequence, cast
 from urllib.parse import parse_qs, urlencode
 
 from fastapi import BackgroundTasks, FastAPI, Query, Request
@@ -69,6 +69,8 @@ from app.services import (
     G2BBidDetailEnrichmentService,
     OperationQueryService,
     PageQueryService,
+    build_health_report,
+    log_sync_job,
 )
 from app.services.g2b_bid_page_crawler import G2BBidPageCrawler
 from app.services.g2b_sync_plan import PHASE2_DETAIL_ENRICHMENT_OPERATIONS
@@ -757,6 +759,14 @@ def get_bids_page_context(
 
 def get_basic_page_context(active_nav: str) -> dict[str, object]:
     page_meta = {
+        "search": (
+            "통합 검색",
+            "키워드 또는 통합 조건으로 필요한 공고를 빠르게 찾고 관심 공고로 등록합니다.",
+        ),
+        "overview": (
+            "전체 현황",
+            "전체 공고 흐름과 최근 운영 상태를 한 화면에서 확인합니다.",
+        ),
         "prespecs": (
             "사전 탐색",
             "발주계획, 사전규격, 조달요청 화면이 여기에 배치됩니다.",
@@ -780,6 +790,125 @@ def get_basic_page_context(active_nav: str) -> dict[str, object]:
         "last_synced_at": LAST_SYNCED_AT,
         "selected_bid": None,
         "page_vm": page_vm,
+    }
+
+
+def get_search_home_context(q: str | None = None) -> dict[str, object]:
+    normalized_query = (q or "").strip()
+    recent_page = list_raw_bids_page(page=1, page_size=5, search_query=normalized_query)
+    recent_bids = build_bids_page_vm(
+        recent_page.items,
+        last_synced_at=get_last_synced_at(recent_page.items),
+        active_nav="search",
+        total_count=recent_page.total,
+        page=1,
+        page_size=5,
+        row_offset=0,
+    ).bids
+    favorite_count = len(list_raw_bids(favorites_only=True))
+    quick_links = [
+        {
+            "label": "AI",
+            "url": "/bids?q=AI",
+            "description": "AI, 데이터, 플랫폼 관련 공고",
+        },
+        {
+            "label": "소방",
+            "url": "/bids?q=소방",
+            "description": "소방본부, 구급, 안전 분야 공고",
+        },
+        {
+            "label": "한국지능정보원",
+            "url": "/bids?q=한국지능정보원",
+            "description": "기관명 중심으로 바로 탐색",
+        },
+        {
+            "label": "마감 임박",
+            "url": "/bids?sort=closed_at_asc",
+            "description": "가까운 마감 순으로 빠르게 확인",
+        },
+    ]
+    return {
+        "active_nav": "search",
+        "last_synced_at": get_last_synced_at(recent_page.items),
+        "selected_bid": None,
+        "page_vm": build_secondary_page_vm(
+            title="통합 검색",
+            description="키워드 또는 통합 조건으로 필요한 공고를 찾고 바로 상세 확인이나 관심 등록으로 이어집니다.",
+            active_nav="search",
+            last_synced_at=get_last_synced_at(recent_page.items),
+        ),
+        "search_query": normalized_query,
+        "quick_links": quick_links,
+        "recent_bids": recent_bids,
+        "summary_stats": [
+            {"label": "전체 검색 대상", "value": str(recent_page.total)},
+            {"label": "관심 공고", "value": str(favorite_count)},
+            {
+                "label": "사전 탐색 연결",
+                "value": str(len(list_prespec_items()[:9999])),
+            },
+            {
+                "label": "사후 분석 결과",
+                "value": str(len(list_result_items()[:9999])),
+            },
+        ],
+    }
+
+
+def get_overview_page_context() -> dict[str, object]:
+    raw_page = list_raw_bids_page(page=1, page_size=5, sort="updated_at", order="desc")
+    recent_bids = build_bids_page_vm(
+        raw_page.items,
+        last_synced_at=get_last_synced_at(raw_page.items),
+        active_nav="overview",
+        total_count=raw_page.total,
+        page=1,
+        page_size=5,
+        row_offset=0,
+    ).bids
+    operation_items = list_operation_items()
+    recent_failed_jobs = [
+        item for item in operation_items if item.get("status") == "failed"
+    ][:5]
+    with Session(engine) as session:
+        health_summary = build_health_report(session)
+    return {
+        "active_nav": "overview",
+        "last_synced_at": get_last_synced_at(raw_page.items),
+        "selected_bid": None,
+        "page_vm": build_secondary_page_vm(
+            title="전체 현황",
+            description="전체 공고 흐름과 최근 운영 상태를 한 화면에서 확인합니다.",
+            active_nav="overview",
+            last_synced_at=get_last_synced_at(raw_page.items),
+        ),
+        "summary_stats": [
+            {"label": "전체 공고", "value": str(raw_page.total)},
+            {
+                "label": "관심 공고",
+                "value": str(len(list_raw_bids(favorites_only=True))),
+            },
+            {
+                "label": "최근 실패 작업",
+                "value": str(
+                    len(
+                        [
+                            item
+                            for item in operation_items
+                            if item.get("status") == "failed"
+                        ]
+                    )
+                ),
+            },
+            {
+                "label": "사후 분석 결과",
+                "value": str(len(list_result_items()[:9999])),
+            },
+        ],
+        "recent_bids": recent_bids,
+        "recent_failed_jobs": recent_failed_jobs,
+        "health_summary": health_summary,
     }
 
 
@@ -878,6 +1007,7 @@ def get_results_page_context() -> dict[str, object]:
 def get_favorites_page_context(
     search_query: str | None = None,
     status: str | None = None,
+    action_feedback: dict[str, str] | None = None,
 ) -> dict[str, object]:
     raw_bids = list_raw_bids(
         search_query=search_query,
@@ -891,6 +1021,7 @@ def get_favorites_page_context(
         if bid.favorite
     ]
     page_vm = build_favorites_page_vm(favorite_bids, last_synced_at)
+    favorites_focus_sections = _build_favorites_focus_sections(favorite_bids)
     return {
         "active_nav": page_vm.active_nav,
         "last_synced_at": page_vm.last_synced_at,
@@ -907,6 +1038,8 @@ def get_favorites_page_context(
         "filter_hx_get": "/partials/favorites/table",
         "filter_hx_target": "#favorites-table-container",
         "bid_status_options": BID_STATUS_OPTIONS,
+        "favorites_focus_sections": favorites_focus_sections,
+        "action_feedback": action_feedback,
     }
 
 
@@ -914,6 +1047,8 @@ def get_operations_page_context(
     status_filter: str | None = None, job_type_filter: str | None = None
 ) -> dict[str, object]:
     all_items = list_operation_items()
+    with Session(engine) as session:
+        health_summary = build_health_report(session)
     items = all_items
     normalized_status_filter = (status_filter or "").strip().lower()
     normalized_job_type_filter = (job_type_filter or "").strip()
@@ -946,7 +1081,189 @@ def get_operations_page_context(
         "status_filter": normalized_status_filter,
         "job_type_filter": normalized_job_type_filter,
         "available_job_types": available_job_types,
+        "health_summary": health_summary,
     }
+
+
+def _build_favorites_focus_sections(
+    items: Sequence[object],
+) -> list[dict[str, object]]:
+    now = datetime.now()
+
+    closing_soon_items = sorted(
+        [
+            item
+            for item in items
+            if now
+            <= _parse_sortable_datetime(getattr(item, "closed_at", ""))
+            <= now + timedelta(days=3)
+        ],
+        key=lambda item: _parse_sortable_datetime(getattr(item, "closed_at", "")),
+    )
+    changed_items = [
+        item
+        for item in items
+        if getattr(item, "version_label", "") not in {"", "최초공고"}
+    ]
+    review_queue_items = [
+        item
+        for item in items
+        if getattr(item, "status", "") in {"검토중", "관심", "수집완료"}
+    ]
+
+    return [
+        {
+            "key": "closing_soon",
+            "title": "마감 임박",
+            "description": "3일 이내 마감되는 관심 공고를 먼저 확인합니다.",
+            "empty_message": "곧 마감되는 관심 공고가 없습니다.",
+            "items": closing_soon_items[:5],
+            "variant": "warning",
+        },
+        {
+            "key": "changed",
+            "title": "변경 감지",
+            "description": "정정, 재공고, 취소 등 버전 변화가 있는 관심 공고입니다.",
+            "empty_message": "최근 변경이 감지된 관심 공고가 없습니다.",
+            "items": changed_items[:5],
+            "variant": "primary",
+        },
+        {
+            "key": "review_queue",
+            "title": "재확인 필요",
+            "description": "검토중이거나 다시 확인이 필요한 관심 공고를 모아 봅니다.",
+            "empty_message": "재확인 대기 중인 관심 공고가 없습니다.",
+            "items": review_queue_items[:5],
+            "variant": "success",
+        },
+    ]
+
+
+def _select_favorite_bid_ids(focus: str | None = None) -> list[str]:
+    favorite_items = list_raw_bids(favorites_only=True)
+    if focus == "closing_soon":
+        now = datetime.now()
+        favorite_items = [
+            item
+            for item in favorite_items
+            if now
+            <= _parse_sortable_datetime(item.get("closed_at"))
+            <= now + timedelta(days=3)
+        ]
+    elif focus == "changed":
+        favorite_items = [
+            item
+            for item in favorite_items
+            if str(item.get("version_label", "")).strip() not in {"", "최초공고"}
+        ]
+    elif focus == "review_queue":
+        favorite_items = [
+            item
+            for item in favorite_items
+            if str(item.get("status", "")).strip() in {"검토중", "관심", "수집완료"}
+        ]
+    return [
+        str(item.get("bid_id", ""))
+        for item in favorite_items
+        if str(item.get("bid_id", "")).strip()
+    ]
+
+
+def _refresh_feedback_title(focus: str | None) -> str:
+    mapping = {
+        None: "관심 공고 재확인",
+        "closing_soon": "마감 임박 공고 재확인",
+        "changed": "변경 감지 공고 재확인",
+        "review_queue": "재확인 필요 공고 재확인",
+    }
+    return mapping.get(focus, "관심 공고 재확인")
+
+
+def _refresh_favorite_bids(focus: str | None = None) -> dict[str, str]:
+    started_at = datetime.now()
+    favorite_bid_ids = _select_favorite_bid_ids(focus)
+    title = _refresh_feedback_title(focus)
+    target_prefix = focus or "all"
+
+    if not favorite_bid_ids:
+        return {
+            "title": title,
+            "variant": "secondary",
+            "message": "재확인할 관심 공고가 없습니다.",
+            "operations_url": "/favorites",
+        }
+
+    if settings.bid_data_backend == "sample":
+        message = (
+            f"processed {len(favorite_bid_ids)} bids detail_items=0 contract_items=0"
+        )
+        _log_manual_sync_job(
+            job_type="favorite_bid_refresh",
+            target=f"{target_prefix}:{','.join(favorite_bid_ids)}",
+            status="completed",
+            started_at=started_at,
+            message=message,
+        )
+        return {
+            "title": title,
+            "variant": "success",
+            "message": message,
+            "operations_url": "/operations?job_type=favorite_bid_refresh",
+        }
+
+    public_client = G2BBidPublicInfoClient()
+    contract_client = G2BContractProcessClient()
+    try:
+        with Session(engine) as session:
+            detail_result = G2BBidDetailEnrichmentService(
+                session=session,
+                client=public_client,
+            ).enrich_bids(
+                bid_ids=favorite_bid_ids,
+                operations=PHASE2_DETAIL_ENRICHMENT_OPERATIONS,
+                selection_mode="targeted",
+                recent_days=7,
+            )
+            contract_result = G2BContractProcessService(
+                session=session,
+                client=contract_client,
+            ).enrich_timelines(bid_ids=favorite_bid_ids)
+        message = (
+            f"processed {len(favorite_bid_ids)} bids "
+            f"detail_items={detail_result.fetched_item_count} "
+            f"contract_items={contract_result.fetched_item_count}"
+        )
+        _log_manual_sync_job(
+            job_type="favorite_bid_refresh",
+            target=f"{target_prefix}:{','.join(favorite_bid_ids)}",
+            status="completed",
+            started_at=started_at,
+            message=message,
+        )
+        return {
+            "title": title,
+            "variant": "success",
+            "message": message,
+            "operations_url": "/operations?job_type=favorite_bid_refresh",
+        }
+    except Exception as exc:
+        message = build_sync_failure_message(exc)
+        _log_manual_sync_job(
+            job_type="favorite_bid_refresh",
+            target=f"{target_prefix}:{','.join(favorite_bid_ids)}",
+            status="failed",
+            started_at=started_at,
+            message=message,
+        )
+        return {
+            "title": title,
+            "variant": "danger",
+            "message": message,
+            "operations_url": "/operations?job_type=favorite_bid_refresh",
+        }
+    finally:
+        public_client.close()
+        contract_client.close()
 
 
 def get_selected_raw_bid(bid_id: str) -> dict[str, object]:
@@ -1034,16 +1351,14 @@ def _log_manual_sync_job(
     message: str,
 ) -> None:
     with Session(engine) as session:
-        log = SyncJobLog(
+        log_sync_job(
+            session=session,
             job_type=job_type,
             target=target,
             status=status,
             started_at=started_at,
-            finished_at=datetime.now(),
             message=message,
         )
-        session.add(log)
-        session.commit()
 
 
 def _run_manual_bid_action(bid_id: str, action: str) -> dict[str, str]:
@@ -1681,17 +1996,38 @@ def _stream_bid_export_rows(bids: list[dict[str, object]]):
 
 
 @app.get("/api/v1/health")
-def health() -> dict[str, object]:
-    return {
-        "success": True,
-        "data": {
-            "status": "ok",
-            "app": settings.app_name,
-            "env": settings.app_env,
-        },
-        "meta": {},
-        "error": None,
-    }
+def health() -> JSONResponse:
+    try:
+        with Session(engine) as session:
+            data = build_health_report(session)
+        status_code = 200 if data["status"] in {"ok", "degraded"} else 503
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "success": status_code < 500,
+                "data": data,
+                "meta": {},
+                "error": None,
+            },
+        )
+    except Exception as exc:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "data": {
+                    "status": "down",
+                    "app": settings.app_name,
+                    "env": settings.app_env,
+                    "database": "error",
+                },
+                "meta": {},
+                "error": {
+                    "code": "HEALTH_CHECK_FAILED",
+                    "message": str(exc),
+                },
+            },
+        )
 
 
 @app.get(
@@ -2355,10 +2691,11 @@ def swagger_embed(doc: str = Query(...)):
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 def root(request: Request):
+    search_query = request.query_params.get("q")
     return templates.TemplateResponse(
         request=request,
-        name="pages/bids/index.html",
-        context=get_bids_page_context(),
+        name="pages/search/index.html",
+        context=get_search_home_context(search_query),
     )
 
 
@@ -2393,6 +2730,15 @@ def bids_page(request: Request):
             page=page,
             page_size=page_size,
         ),
+    )
+
+
+@app.get("/overview", response_class=HTMLResponse, include_in_schema=False)
+def overview_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="pages/overview/index.html",
+        context=get_overview_page_context(),
     )
 
 
@@ -2433,6 +2779,16 @@ def favorites_page(request: Request):
         request=request,
         name="pages/favorites/index.html",
         context=get_favorites_page_context(search_query=search_query, status=status),
+    )
+
+
+@app.post("/favorites/refresh", response_class=HTMLResponse, include_in_schema=False)
+def favorites_refresh_page(request: Request, focus: str | None = Query(default=None)):
+    feedback = _refresh_favorite_bids(focus=focus)
+    return templates.TemplateResponse(
+        request=request,
+        name="pages/favorites/index.html",
+        context=get_favorites_page_context(action_feedback=feedback),
     )
 
 

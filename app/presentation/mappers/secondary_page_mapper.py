@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from app.presentation.viewmodels.bids import BidListItemVM
 from app.presentation.viewmodels.dashboard import DashboardStatVM, DashboardSummaryVM
 from app.presentation.viewmodels.favorites import FavoritesPageVM
@@ -58,18 +60,33 @@ def build_results_page_vm(
 def build_favorites_page_vm(
     items: list[BidListItemVM], last_synced_at: str
 ) -> FavoritesPageVM:
+    now = datetime.now()
+    closing_soon_count = sum(
+        1
+        for item in items
+        if now <= _parse_datetime(item.closed_at) <= now + timedelta(days=3)
+    )
+    review_count = sum(
+        1 for item in items if item.status in {"검토중", "관심", "수집완료"}
+    )
+    changed_count = sum(
+        1
+        for item in items
+        if item.version_label and item.version_label not in {"", "최초공고"}
+    )
+
     return FavoritesPageVM(
         title="관심 공고",
-        description="즐겨찾기한 공고 목록 화면이 여기에 배치됩니다.",
+        description="즐겨찾기한 공고를 모아 마감 임박, 변경 감지, 재확인 필요 항목부터 집중 관리합니다.",
         active_nav="favorites",
         last_synced_at=last_synced_at,
         summary=_build_summary(
             last_synced_at,
             [
                 DashboardStatVM(label="관심 공고", value=str(len(items))),
-                DashboardStatVM(label="오늘 마감", value="1"),
-                DashboardStatVM(label="검토중", value="1"),
-                DashboardStatVM(label="변경 감지", value="1"),
+                DashboardStatVM(label="마감 임박", value=str(closing_soon_count)),
+                DashboardStatVM(label="재확인 필요", value=str(review_count)),
+                DashboardStatVM(label="변경 감지", value=str(changed_count)),
             ],
         ),
         items=items,
@@ -110,3 +127,12 @@ def _build_summary(
     last_synced_at: str, items: list[DashboardStatVM]
 ) -> DashboardSummaryVM:
     return DashboardSummaryVM(items=items, last_synced_at=last_synced_at)
+
+
+def _parse_datetime(value: str) -> datetime:
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    return datetime.min

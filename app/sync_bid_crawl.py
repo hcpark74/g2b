@@ -4,8 +4,8 @@ from datetime import datetime
 from sqlmodel import Session
 
 from app.db import engine, init_db
-from app.models import SyncJobLog
 from app.services import G2BBidCrawlService
+from app.services.operations_runtime import log_sync_job
 from app.services.g2b_bid_page_crawler import G2BBidPageCrawler
 from app.services.sync_logging import build_sync_failure_message
 
@@ -32,33 +32,27 @@ def main() -> None:
         with Session(engine) as session:
             service = G2BBidCrawlService(session=session, crawler=crawler)
             result = service.crawl_bids(bid_ids=selected_bid_ids)
-            session.add(
-                SyncJobLog(
-                    job_type="bid_page_crawl",
-                    target=",".join(selected_bid_ids),
-                    status="completed",
-                    started_at=started_at,
-                    finished_at=datetime.now(),
-                    message=(
-                        f"processed {len(result.processed_bid_ids)} bids, "
-                        f"stored {result.attachment_count} attachments"
-                    ),
-                )
+            log_sync_job(
+                session=session,
+                job_type="bid_page_crawl",
+                target=",".join(selected_bid_ids),
+                status="completed",
+                started_at=started_at,
+                message=(
+                    f"processed {len(result.processed_bid_ids)} bids, "
+                    f"stored {result.attachment_count} attachments"
+                ),
             )
-            session.commit()
     except Exception as exc:
         with Session(engine) as session:
-            session.add(
-                SyncJobLog(
-                    job_type="bid_page_crawl",
-                    target=",".join(selected_bid_ids),
-                    status="failed",
-                    started_at=started_at,
-                    finished_at=datetime.now(),
-                    message=build_sync_failure_message(exc),
-                )
+            log_sync_job(
+                session=session,
+                job_type="bid_page_crawl",
+                target=",".join(selected_bid_ids),
+                status="failed",
+                started_at=started_at,
+                message=build_sync_failure_message(exc),
             )
-            session.commit()
         raise
 
 

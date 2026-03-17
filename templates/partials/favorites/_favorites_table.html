@@ -20,7 +20,7 @@
             <td>{% with label=item.status, variant=item.status_variant %}{% include "partials/shared/_status_badge.html" %}{% endwith %}</td>
             <td>{{ item.business_type }}</td>
             <td>{{ item.display_bid_no }}</td>
-            <td><a href="#" class="text-decoration-none app-link">{{ item.title }}</a></td>
+            <td><a href="/bids?q={{ item.display_bid_no }}" class="text-decoration-none app-link">{{ item.title }}</a></td>
             <td>{{ item.notice_org }}</td>
             <td>{{ item.demand_org }}</td>
             <td>{{ item.closed_at }}</td>

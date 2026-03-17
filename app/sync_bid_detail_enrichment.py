@@ -5,7 +5,7 @@ from sqlmodel import Session
 
 from app.clients import G2BBidPublicInfoClient
 from app.db import engine, init_db
-from app.models import SyncJobLog
+from app.services.operations_runtime import log_sync_job
 from app.services.g2b_bid_detail_enrichment_service import G2BBidDetailEnrichmentService
 from app.services.g2b_sync_plan import PHASE2_DETAIL_ENRICHMENT_OPERATIONS
 from app.services.sync_logging import build_sync_failure_message
@@ -62,43 +62,33 @@ def main() -> None:
                 selection_mode=args.selection_mode,
                 recent_days=args.recent_days,
             )
-            session.add(
-                SyncJobLog(
-                    job_type="bid_detail_enrichment",
-                    target=",".join(selected_bid_ids)
-                    if selected_bid_ids
-                    else "all-bids",
-                    status="completed",
-                    started_at=started_at,
-                    finished_at=datetime.now(),
-                    message=(
-                        f"operations={','.join(selected_operations)} "
-                        f"selection_mode={args.selection_mode} "
-                        f"processed {len(result.processed_bid_ids)} bids, "
-                        f"fetched {result.fetched_item_count} items"
-                    ),
-                )
+            log_sync_job(
+                session=session,
+                job_type="bid_detail_enrichment",
+                target=",".join(selected_bid_ids) if selected_bid_ids else "all-bids",
+                status="completed",
+                started_at=started_at,
+                message=(
+                    f"operations={','.join(selected_operations)} "
+                    f"selection_mode={args.selection_mode} "
+                    f"processed {len(result.processed_bid_ids)} bids, "
+                    f"fetched {result.fetched_item_count} items"
+                ),
             )
-            session.commit()
     except Exception as exc:
         with Session(engine) as session:
-            session.add(
-                SyncJobLog(
-                    job_type="bid_detail_enrichment",
-                    target=",".join(selected_bid_ids)
-                    if selected_bid_ids
-                    else "all-bids",
-                    status="failed",
-                    started_at=started_at,
-                    finished_at=datetime.now(),
-                    message=(
-                        f"operations={','.join(selected_operations)} "
-                        f"selection_mode={args.selection_mode} "
-                        f"{build_sync_failure_message(exc)}"
-                    ),
-                )
+            log_sync_job(
+                session=session,
+                job_type="bid_detail_enrichment",
+                target=",".join(selected_bid_ids) if selected_bid_ids else "all-bids",
+                status="failed",
+                started_at=started_at,
+                message=(
+                    f"operations={','.join(selected_operations)} "
+                    f"selection_mode={args.selection_mode} "
+                    f"{build_sync_failure_message(exc)}"
+                ),
             )
-            session.commit()
         raise
     finally:
         client.close()

@@ -1,0 +1,108 @@
+{% extends "layouts/app_shell.html" %}
+
+{% block title %}통합 검색{% endblock %}
+
+{% block content %}
+  <section class="app-surface app-card rounded shadow-sm p-4 mb-3">
+    <div class="soft-label mb-2">시작 페이지</div>
+    <h1 class="display-6 fw-bold mb-2">필요한 공고를 키워드로 바로 찾으세요.</h1>
+    <p class="text-secondary mb-4">공고명, 기관명, 공고번호를 기준으로 찾고 바로 상세 확인하거나 관심 공고로 등록할 수 있습니다.</p>
+    <form method="get" action="/bids" class="row g-2 align-items-center">
+      <div class="col-lg-9">
+        <input class="form-control form-control-lg" type="search" name="q" value="{{ search_query }}" placeholder="예: AI, 소방, 한국지능정보원, 공고번호">
+      </div>
+      <div class="col-lg-3 d-grid">
+        <button class="btn btn-primary btn-lg" type="submit">통합 검색</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="mb-3">
+    {% include "partials/shared/_summary_cards.html" %}
+  </section>
+
+  <section class="app-surface rounded shadow-sm p-3 border mb-3">
+    <div class="section-title mb-3">빠른 탐색</div>
+    <div class="row g-3">
+      {% for item in quick_links %}
+        <div class="col-md-6 col-xl-3">
+          <a href="{{ item.url }}" class="text-decoration-none text-reset">
+            <div class="card app-card shadow-sm h-100">
+              <div class="card-body">
+                <div class="fw-semibold mb-1">{{ item.label }}</div>
+                <div class="small text-secondary">{{ item.description }}</div>
+              </div>
+            </div>
+          </a>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="app-surface rounded shadow-sm p-3 border mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <div class="section-title">최근 확인한 공고 흐름</div>
+        <div class="small text-secondary">최신 공고부터 먼저 보고 필요한 공고를 관심 등록으로 이어갑니다.</div>
+      </div>
+      <a href="/favorites" class="btn btn-outline-secondary btn-sm">관심 공고 보기</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm app-table align-middle mb-0">
+        <thead>
+          <tr>
+            <th>공고번호</th>
+            <th>공고명</th>
+            <th>기관</th>
+            <th>상태</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bid in recent_bids %}
+            <tr>
+              <td>{{ bid.display_bid_no }}</td>
+              <td>{{ bid.title }}</td>
+              <td>{{ bid.notice_org }}</td>
+              <td>{% with label=bid.status, variant=bid.status_variant %}{% include "partials/shared/_status_badge.html" %}{% endwith %}</td>
+              <td><a href="/bids?q={{ bid.display_bid_no }}" class="text-decoration-none app-link">결과 보기</a></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" class="text-center text-secondary py-4">표시할 공고가 없습니다.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="row g-3">
+    <div class="col-lg-4">
+      <a href="/overview" class="text-decoration-none text-reset">
+        <div class="app-surface rounded shadow-sm p-3 border h-100">
+          <div class="section-title mb-1">전체 현황</div>
+          <div class="small text-secondary">전체 공고 흐름, 최근 실패 작업, 운영 상태를 함께 봅니다.</div>
+        </div>
+      </a>
+    </div>
+    <div class="col-lg-4">
+      <a href="/prespecs" class="text-decoration-none text-reset">
+        <div class="app-surface rounded shadow-sm p-3 border h-100">
+          <div class="section-title mb-1">사전 탐색</div>
+          <div class="small text-secondary">발주계획, 사전규격, 조달요청에서 본공고 후보를 찾습니다.</div>
+        </div>
+      </a>
+    </div>
+    <div class="col-lg-4">
+      <a href="/results" class="text-decoration-none text-reset">
+        <div class="app-surface rounded shadow-sm p-3 border h-100">
+          <div class="section-title mb-1">사후 분석</div>
+          <div class="small text-secondary">낙찰 및 계약 결과를 빠르게 확인합니다.</div>
+        </div>
+      </a>
+    </div>
+  </section>
+{% endblock %}
+
+{% block drawer %}
+  <div class="p-4 text-secondary small">검색 결과를 선택하면 상세 Drawer가 여기에 열립니다.</div>
+{% endblock %}

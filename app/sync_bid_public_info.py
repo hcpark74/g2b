@@ -5,7 +5,7 @@ from sqlmodel import Session
 
 from app.clients import G2BBidPublicInfoClient
 from app.db import engine, init_db
-from app.models import SyncJobLog
+from app.services.operations_runtime import log_sync_job
 from app.services.g2b_bid_sync_service import (
     DEFAULT_BID_PUBLIC_INFO_OPERATIONS,
     BidPublicInfoSyncOperationError,
@@ -57,17 +57,14 @@ def main() -> None:
                 operations=selected_operations,
                 num_of_rows=args.rows,
             )
-            session.add(
-                SyncJobLog(
-                    job_type="bid_public_info_sync",
-                    target=",".join(selected_operations),
-                    status="completed",
-                    started_at=started_at,
-                    finished_at=datetime.now(),
-                    message=f"fetched {result.fetched_count} bids, upserted {result.upserted_count} bids",
-                )
+            log_sync_job(
+                session=session,
+                job_type="bid_public_info_sync",
+                target=",".join(selected_operations),
+                status="completed",
+                started_at=started_at,
+                message=f"fetched {result.fetched_count} bids, upserted {result.upserted_count} bids",
             )
-            session.commit()
     except Exception as exc:
         target = ",".join(selected_operations)
         message = build_sync_failure_message(exc)
@@ -75,17 +72,14 @@ def main() -> None:
             target = exc.operation_name
 
         with Session(engine) as session:
-            session.add(
-                SyncJobLog(
-                    job_type="bid_public_info_sync",
-                    target=target,
-                    status="failed",
-                    started_at=started_at,
-                    finished_at=datetime.now(),
-                    message=message,
-                )
+            log_sync_job(
+                session=session,
+                job_type="bid_public_info_sync",
+                target=target,
+                status="failed",
+                started_at=started_at,
+                message=message,
             )
-            session.commit()
         raise
     finally:
         client.close()

@@ -9,7 +9,6 @@ from app.clients import (
     G2BIndustryInfoClient,
 )
 from app.db import engine, init_db
-from app.models import SyncJobLog
 from app.services import (
     G2BBidCrawlService,
     G2BBidChangeHistoryService,
@@ -17,6 +16,7 @@ from app.services import (
     G2BReferenceEnrichmentService,
     G2BContractProcessService,
 )
+from app.services.operations_runtime import log_sync_job
 from app.services.g2b_bid_page_crawler import G2BBidPageCrawler
 from app.services.g2b_sync_plan import PHASE2_DETAIL_ENRICHMENT_OPERATIONS
 from app.services.sync_logging import build_sync_failure_message
@@ -128,45 +128,35 @@ def main() -> None:
                 )
                 reference_items = reference_result.fetched_item_count
 
-            session.add(
-                SyncJobLog(
-                    job_type="phase2_batch_sync",
-                    target=",".join(processed_bid_ids)
-                    if processed_bid_ids
-                    else "all-bids",
-                    status="completed",
-                    started_at=started_at,
-                    finished_at=datetime.now(),
-                    message=(
-                        f"selection_mode={args.selection_mode} "
-                        f"processed {len(processed_bid_ids)} bids "
-                        f"detail_items={detail_items} "
-                        f"change_history_items={change_history_items} "
-                        f"contract_items={contract_items} "
-                        f"crawl_attachments={crawl_attachments} "
-                        f"reference_items={reference_items}"
-                    ),
-                )
+            log_sync_job(
+                session=session,
+                job_type="phase2_batch_sync",
+                target=",".join(processed_bid_ids) if processed_bid_ids else "all-bids",
+                status="completed",
+                started_at=started_at,
+                message=(
+                    f"selection_mode={args.selection_mode} "
+                    f"processed {len(processed_bid_ids)} bids "
+                    f"detail_items={detail_items} "
+                    f"change_history_items={change_history_items} "
+                    f"contract_items={contract_items} "
+                    f"crawl_attachments={crawl_attachments} "
+                    f"reference_items={reference_items}"
+                ),
             )
-            session.commit()
     except Exception as exc:
         with Session(engine) as session:
-            session.add(
-                SyncJobLog(
-                    job_type="phase2_batch_sync",
-                    target=",".join(selected_bid_ids)
-                    if selected_bid_ids
-                    else "all-bids",
-                    status="failed",
-                    started_at=started_at,
-                    finished_at=datetime.now(),
-                    message=(
-                        f"selection_mode={args.selection_mode} "
-                        f"{build_sync_failure_message(exc)}"
-                    ),
-                )
+            log_sync_job(
+                session=session,
+                job_type="phase2_batch_sync",
+                target=",".join(selected_bid_ids) if selected_bid_ids else "all-bids",
+                status="failed",
+                started_at=started_at,
+                message=(
+                    f"selection_mode={args.selection_mode} "
+                    f"{build_sync_failure_message(exc)}"
+                ),
             )
-            session.commit()
         raise
     finally:
         detail_client.close()

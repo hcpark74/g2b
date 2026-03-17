@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     bid_data_backend: str = "auto"
     admin_sync_token: str = "dev-admin-token"
     job_log_retention_days: int = 30
+    ops_slack_webhook_url: str = ""
+    ops_health_recent_failure_hours: int = 24
 
     g2b_api_service_key_encoded: str = ""
     g2b_api_service_key_decoded: str = ""

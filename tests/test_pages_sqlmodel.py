@@ -3,6 +3,7 @@ import json
 from collections.abc import Generator
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -137,7 +138,7 @@ def test_sqlmodel_bids_page_renders(sqlmodel_client: TestClient) -> None:
     response = sqlmodel_client.get("/bids")
 
     assert response.status_code == 200
-    assert "입찰 공고 목록" in response.text
+    assert "통합 검색 결과" in response.text
     assert "현재 조건 결과 3건" in response.text
     assert "마지막 동기화: 2026-03-13 10:00" in response.text
 
@@ -497,8 +498,12 @@ def test_sqlmodel_favorites_page_renders_seeded_favorites(
 
     assert response.status_code == 200
     assert "관심 공고" in response.text
+    assert "마감 임박" in response.text
+    assert "변경 감지" in response.text
+    assert "재확인 필요" in response.text
     assert "R26BK00000001-000" in response.text
     assert "R26BK00000003-000" in response.text
+    assert 'href="/bids?q=R26BK00000001-000"' in response.text
 
 
 def test_sqlmodel_pages_use_display_bid_no_policy(sqlmodel_client: TestClient) -> None:
@@ -717,7 +722,7 @@ def test_auto_backend_prefers_seeded_sqlmodel_data(
     response = auto_backend_client.get("/bids")
 
     assert response.status_code == 200
-    assert "입찰 공고 목록" in response.text
+    assert "통합 검색 결과" in response.text
     assert "R26BK00000001-000" in response.text
     assert "전남소방본부 구급소모품 구매" in response.text
     assert "마지막 동기화: 2026-03-13 10:00" in response.text
@@ -823,6 +828,137 @@ def test_bids_table_favorite_toggle_partial_updates_favorites(
     favorites_response = sqlmodel_client.get("/favorites")
     assert favorites_response.status_code == 200
     assert "R26BK00000002-000" in favorites_response.text
+
+
+def test_favorites_refresh_action_records_operation_log(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "favorite-refresh.db"
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("BID_DATA_BACKEND", "sqlmodel")
+    monkeypatch.setenv("DEBUG", "false")
+
+    _reload_module("app.config")
+    _reload_module("app.db")
+    seed_module = _reload_module("app.seed_bids")
+    seed_module.seed_bids()
+    main_module = _reload_module("app.main")
+
+    class DummyPublicClient:
+        def close(self) -> None:
+            return None
+
+    class DummyContractClient:
+        def close(self) -> None:
+            return None
+
+    class DummyDetailResult:
+        fetched_item_count = 4
+
+    class DummyContractResult:
+        fetched_item_count = 2
+
+    class DummyDetailService:
+        def __init__(self, session, client) -> None:
+            self.session = session
+            self.client = client
+
+        def enrich_bids(self, **kwargs):
+            assert kwargs["bid_ids"]
+            return DummyDetailResult()
+
+    class DummyContractService:
+        def __init__(self, session, client) -> None:
+            self.session = session
+            self.client = client
+
+        def enrich_timelines(self, **kwargs):
+            assert kwargs["bid_ids"]
+            return DummyContractResult()
+
+    monkeypatch.setattr(main_module, "G2BBidPublicInfoClient", DummyPublicClient)
+    monkeypatch.setattr(main_module, "G2BContractProcessClient", DummyContractClient)
+    monkeypatch.setattr(
+        main_module, "G2BBidDetailEnrichmentService", DummyDetailService
+    )
+    monkeypatch.setattr(main_module, "G2BContractProcessService", DummyContractService)
+
+    with TestClient(main_module.app) as client:
+        response = client.post("/favorites/refresh")
+        operations_response = client.get("/operations?job_type=favorite_bid_refresh")
+
+    assert response.status_code == 200
+    assert "관심 공고만 재확인" in response.text
+    assert "processed 2 bids detail_items=4 contract_items=2" in response.text
+    assert operations_response.status_code == 200
+    assert "favorite_bid_refresh" in operations_response.text
+
+
+def test_favorites_section_refresh_action_filters_target_bids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "favorite-refresh-section.db"
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("BID_DATA_BACKEND", "sqlmodel")
+    monkeypatch.setenv("DEBUG", "false")
+
+    _reload_module("app.config")
+    _reload_module("app.db")
+    seed_module = _reload_module("app.seed_bids")
+    seed_module.seed_bids()
+    main_module = _reload_module("app.main")
+
+    captured: dict[str, object] = {}
+
+    class DummyPublicClient:
+        def close(self) -> None:
+            return None
+
+    class DummyContractClient:
+        def close(self) -> None:
+            return None
+
+    class DummyDetailResult:
+        fetched_item_count = 1
+
+    class DummyContractResult:
+        fetched_item_count = 1
+
+    class DummyDetailService:
+        def __init__(self, session, client) -> None:
+            self.session = session
+            self.client = client
+
+        def enrich_bids(self, **kwargs):
+            captured["bid_ids"] = kwargs["bid_ids"]
+            return DummyDetailResult()
+
+    class DummyContractService:
+        def __init__(self, session, client) -> None:
+            self.session = session
+            self.client = client
+
+        def enrich_timelines(self, **kwargs):
+            return DummyContractResult()
+
+    monkeypatch.setattr(main_module, "G2BBidPublicInfoClient", DummyPublicClient)
+    monkeypatch.setattr(main_module, "G2BContractProcessClient", DummyContractClient)
+    monkeypatch.setattr(
+        main_module, "G2BBidDetailEnrichmentService", DummyDetailService
+    )
+    monkeypatch.setattr(main_module, "G2BContractProcessService", DummyContractService)
+
+    with TestClient(main_module.app) as client:
+        response = client.post("/favorites/refresh?focus=review_queue")
+
+    assert response.status_code == 200
+    assert "재확인 필요 공고 재확인" in response.text
+    assert set(cast(list[str], captured["bid_ids"])) == {
+        "R26BK00000001-000",
+        "R26BK00000003-000",
+    }
 
 
 def test_bids_table_status_partial_updates_bid_status(
@@ -964,6 +1100,9 @@ def test_operations_page_prefers_db_logs(operations_client: TestClient) -> None:
     response = operations_client.get("/operations")
 
     assert response.status_code == 200
+    assert "운영 상태 요약" in response.text
+    assert "최근 실패" in response.text
+    assert "최근 작업" in response.text
     assert "bid_public_info_sync" in response.text
     assert "getBidPblancListInfoServc" in response.text
     assert "마지막 동기화: 2026-03-13 06:04" in response.text
@@ -978,13 +1117,36 @@ def test_operations_page_prefers_db_logs(operations_client: TestClient) -> None:
     assert "temporary" in response.text
 
 
+def test_operations_page_shows_degraded_alert_for_latest_failed_job(
+    operations_client: TestClient,
+) -> None:
+    main_module = importlib.import_module("app.main")
+    with Session(main_module.engine) as session:
+        session.add(
+            SyncJobLog(
+                job_type="bid_page_crawl",
+                target="R26BK99999999-000",
+                status="failed",
+                started_at=datetime(2026, 3, 13, 7, 0),
+                finished_at=datetime(2026, 3, 13, 7, 1),
+                message="failure_category=browser_dom exception_type=RuntimeError detail=selector missing",
+            )
+        )
+        session.commit()
+
+    response = operations_client.get("/operations")
+
+    assert response.status_code == 200
+    assert "최근 작업이 실패 상태입니다." in response.text
+    assert "R26BK99999999-000" in response.text
+
+
 def test_operations_page_filters_failed_status(operations_client: TestClient) -> None:
     response = operations_client.get("/operations?status=failed")
 
     assert response.status_code == 200
     assert "getBidPblancListInfoThng" in response.text
     assert "temporary" in response.text
-    assert "getBidPblancListInfoServc" not in response.text
     assert "fetched 4 bids, upserted 4 bids" not in response.text
 
 
@@ -1006,7 +1168,6 @@ def test_operations_page_filters_by_status_and_job_type(
     assert response.status_code == 200
     assert "getBidPblancListInfoThng" in response.text
     assert "temporary" in response.text
-    assert "getBidPblancListInfoServc" not in response.text
 
 
 def test_operations_page_formats_phase2_batch_log(

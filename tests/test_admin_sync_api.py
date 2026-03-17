@@ -135,6 +135,52 @@ def test_admin_sync_bid_public_info_returns_failed_response(
     assert "failure_category=unexpected" in payload["message"]
 
 
+def test_admin_sync_failure_sends_slack_webhook(
+    admin_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[dict[str, Any]] = []
+
+    class StubClient:
+        def close(self) -> None:
+            return None
+
+    class FailingService:
+        def __init__(self, session, client) -> None:
+            self.session = session
+            self.client = client
+
+        def sync_bid_notices(self, **_: Any):
+            raise RuntimeError("mock slack failure")
+
+    def fake_post(url: str, json: dict[str, Any], timeout: float) -> None:
+        calls.append({"url": url, "json": json, "timeout": timeout})
+
+    monkeypatch.setattr("app.admin_sync_router.G2BBidPublicInfoClient", StubClient)
+    monkeypatch.setattr(
+        "app.admin_sync_router.G2BBidPublicInfoSyncService", FailingService
+    )
+    monkeypatch.setattr(
+        "app.services.operations_runtime.settings.ops_slack_webhook_url",
+        "https://hooks.slack.test/services/example",
+    )
+    monkeypatch.setattr("app.services.operations_runtime.httpx.post", fake_post)
+
+    response = admin_client.post(
+        "/admin/sync/bid-public-info",
+        json={
+            "begin": "202603120000",
+            "end": "202603132359",
+        },
+        headers=_admin_headers(),
+    )
+
+    assert response.status_code == 200
+    assert len(calls) == 1
+    assert calls[0]["url"] == "https://hooks.slack.test/services/example"
+    assert "bid_public_info_sync" in calls[0]["json"]["text"]
+    assert "mock slack failure" in calls[0]["json"]["text"]
+
+
 def test_admin_operations_lists_and_filters_logs(
     admin_client: TestClient,
 ) -> None:
@@ -517,6 +563,46 @@ def test_openapi_docs_expose_only_json_api_routes(admin_client: TestClient) -> N
         "/admin/sync/bid-crawl",
         "/admin/sync/phase2-batch",
     }
+
+
+def test_health_api_returns_ok_when_database_is_available(
+    admin_client: TestClient,
+) -> None:
+    response = admin_client.get("/api/v1/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["status"] == "ok"
+    assert payload["data"]["database"] == "ok"
+    assert payload["data"]["recent_failed_jobs"] == 0
+
+
+def test_health_api_returns_degraded_when_latest_job_failed(
+    admin_client: TestClient,
+) -> None:
+    main_module = importlib.import_module("app.main")
+    with Session(main_module.engine) as session:
+        session.add(
+            SyncJobLog(
+                job_type="bid_page_crawl",
+                target="R26BK01387837-000",
+                status="failed",
+                started_at=datetime.now(),
+                finished_at=datetime.now(),
+                message="failure_category=browser_dom exception_type=RuntimeError detail=selector not found",
+            )
+        )
+        session.commit()
+
+    response = admin_client.get("/api/v1/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["status"] == "degraded"
+    assert payload["data"]["recent_failed_jobs"] >= 1
+    assert payload["data"]["latest_job"]["status"] == "failed"
 
 
 def test_custom_doc_alias_renders_same_docs_shell(admin_client: TestClient) -> None:

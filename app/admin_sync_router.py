@@ -37,6 +37,7 @@ from app.services import (
     G2BReferenceEnrichmentService,
     G2BBidPublicInfoSyncService,
     G2BContractProcessService,
+    log_sync_job,
 )
 from app.services.g2b_bid_page_crawler import G2BBidPageCrawler
 from app.services.g2b_bid_sync_service import DEFAULT_BID_PUBLIC_INFO_OPERATIONS
@@ -112,18 +113,14 @@ def _log_job(
     started_at: datetime,
     message: str,
 ) -> SyncJobLog:
-    log = SyncJobLog(
+    return log_sync_job(
+        session=session,
         job_type=job_type,
         target=target,
         status=status,
         started_at=started_at,
-        finished_at=datetime.now(),
         message=message,
     )
-    session.add(log)
-    session.commit()
-    session.refresh(log)
-    return log
 
 
 @router.post(

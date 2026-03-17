@@ -57,6 +57,24 @@ def test_favorites_page_shows_empty_state_when_no_favorites(
     assert "표시할 관심 공고가 없습니다." in response.text
 
 
+def test_favorites_refresh_action_handles_empty_favorites(
+    empty_sqlmodel_client: TestClient,
+) -> None:
+    response = empty_sqlmodel_client.post("/favorites/refresh")
+
+    assert response.status_code == 200
+    assert "재확인할 관심 공고가 없습니다." in response.text
+
+
+def test_favorites_section_refresh_handles_empty_matching_items(
+    empty_sqlmodel_client: TestClient,
+) -> None:
+    response = empty_sqlmodel_client.post("/favorites/refresh?focus=changed")
+
+    assert response.status_code == 200
+    assert "재확인할 관심 공고가 없습니다." in response.text
+
+
 def test_operations_page_shows_empty_state_when_no_logs(
     empty_sqlmodel_client: TestClient,
 ) -> None:

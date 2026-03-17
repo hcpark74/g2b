@@ -31,11 +31,28 @@ def client(
         yield test_client
 
 
+def test_search_home_renders(client: TestClient) -> None:
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "필요한 공고를 키워드로 바로 찾으세요." in response.text
+    assert "통합 검색" in response.text
+    assert "전체 현황" in response.text
+
+
+def test_overview_page_renders(client: TestClient) -> None:
+    response = client.get("/overview")
+
+    assert response.status_code == 200
+    assert "전체 현황" in response.text
+    assert "운영 상태 요약" in response.text
+
+
 def test_bids_page_renders(client: TestClient) -> None:
     response = client.get("/bids")
 
     assert response.status_code == 200
-    assert "입찰 공고 목록" in response.text
+    assert "통합 검색 결과" in response.text
     assert "현재 조건 결과 3건" in response.text
 
 

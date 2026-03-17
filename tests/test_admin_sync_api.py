@@ -545,6 +545,7 @@ def test_openapi_docs_expose_only_json_api_routes(admin_client: TestClient) -> N
     paths = set(schema["paths"].keys())
     assert paths == {
         "/api/v1/health",
+        "/api/v1/search/bids",
         "/api/v1/bids",
         "/api/v1/bids/export",
         "/api/v1/bids/{bid_id}",
@@ -636,6 +637,7 @@ def test_filtered_docs_openapi_exposes_only_bids_tag(admin_client: TestClient) -
     assert response.status_code == 200
     schema = response.json()
     assert set(schema["paths"].keys()) == {
+        "/api/v1/search/bids",
         "/api/v1/bids",
         "/api/v1/bids/export",
         "/api/v1/bids/{bid_id}",

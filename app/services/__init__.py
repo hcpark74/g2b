@@ -1,5 +1,6 @@
 from app.services.bid_query_service import BidQueryService
 from app.services.g2b_bid_crawl_service import G2BBidCrawlService
+from app.services.g2b_bid_search_service import G2BBidSearchService
 from app.services.g2b_bid_change_history_service import G2BBidChangeHistoryService
 from app.services.g2b_bid_detail_enrichment_service import G2BBidDetailEnrichmentService
 from app.services.g2b_reference_enrichment_service import G2BReferenceEnrichmentService
@@ -14,6 +15,7 @@ from app.services.sync_logging import build_sync_failure_message, classify_sync_
 __all__ = [
     "BidQueryService",
     "G2BBidCrawlService",
+    "G2BBidSearchService",
     "G2BBidChangeHistoryService",
     "G2BBidDetailEnrichmentService",
     "G2BReferenceEnrichmentService",

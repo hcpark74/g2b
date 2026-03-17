@@ -11,7 +11,12 @@ from urllib.parse import parse_qs, urlencode
 from fastapi import BackgroundTasks, FastAPI, Query, Request
 from fastapi.exceptions import HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import (
+    JSONResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
@@ -29,6 +34,10 @@ from app.api_schemas import (
     BidListApiResponse,
     BidListItemResponse,
     BidListMetaResponse,
+    LiveBidSearchApiResponse,
+    LiveBidSearchDataResponse,
+    LiveBidSearchItemResponse,
+    LiveBidSearchMetaResponse,
     BidStatusUpdateRequest,
     JobListApiResponse,
     JobListDataResponse,
@@ -43,7 +52,13 @@ from app.api_schemas import (
 )
 from app.config import settings
 from app.db import engine, init_db
-from app.models import BID_STATUS_OPTIONS, Bid, SyncJobLog  # noqa: F401
+from app.models import (
+    BID_STATUS_FAVORITE,
+    BID_STATUS_OPTIONS,
+    Bid,
+    BidDetail,
+    SyncJobLog,
+)  # noqa: F401
 from app.presentation.mappers import (
     build_bid_drawer_vm,
     build_bids_page_vm,
@@ -65,7 +80,9 @@ from app.clients import G2BBidPublicInfoClient, G2BContractProcessClient
 from app.services import (
     BidQueryService,
     G2BBidCrawlService,
+    G2BBidPublicInfoSyncService,
     G2BContractProcessService,
+    G2BBidSearchService,
     G2BBidDetailEnrichmentService,
     OperationQueryService,
     PageQueryService,
@@ -267,6 +284,7 @@ BID_SORT_OPTIONS = [
 BID_PAGE_SIZE_OPTIONS = [25, 50, 100]
 DEFAULT_BIDS_SORT = "updated_at"
 DEFAULT_BIDS_PAGE_SIZE = 25
+LIVE_SEARCH_PAGE_SIZE = 50
 
 
 def list_raw_bids(
@@ -755,6 +773,273 @@ def get_bids_page_context(
         "show_version_filter": True,
         "bid_status_options": BID_STATUS_OPTIONS,
     }
+
+
+def _should_run_background_favorite_refresh() -> bool:
+    return bool(
+        settings.g2b_api_service_key_encoded or settings.g2b_api_service_key_decoded
+    )
+
+
+def _build_live_search_action_feedback(request: Request) -> dict[str, str] | None:
+    saved_bid_id = (request.query_params.get("saved_bid_id") or "").strip()
+    error_message = (request.query_params.get("search_error") or "").strip()
+    if saved_bid_id:
+        return {
+            "title": "관심 공고 등록 완료",
+            "variant": "success",
+            "message": f"{saved_bid_id} 공고를 관심 공고로 저장했습니다.",
+            "operations_url": "/favorites",
+        }
+    if error_message:
+        return {
+            "title": "검색 또는 저장 실패",
+            "variant": "danger",
+            "message": error_message,
+            "operations_url": "/operations",
+        }
+    return None
+
+
+def _build_live_search_query_params(
+    *,
+    search_query: str,
+    org: str,
+    closed_from: str,
+    closed_to: str,
+    sort: str,
+) -> dict[str, str]:
+    params: dict[str, str] = {}
+    if search_query:
+        params["q"] = search_query
+    if org:
+        params["org"] = org
+    if closed_from:
+        params["closed_from"] = closed_from
+    if closed_to:
+        params["closed_to"] = closed_to
+    if sort and sort != DEFAULT_BIDS_SORT:
+        params["sort"] = sort
+    return params
+
+
+def get_live_bids_page_context(
+    request: Request,
+    search_query: str | None = None,
+    org: str | None = None,
+    closed_from: str | None = None,
+    closed_to: str | None = None,
+    sort: str | None = None,
+) -> dict[str, object]:
+    normalized_search_query = (search_query or "").strip()
+    normalized_org = (org or "").strip()
+    normalized_closed_from = (closed_from or "").strip()
+    normalized_closed_to = (closed_to or "").strip()
+    normalized_sort, _, _ = _normalize_bids_sort(sort)
+    action_feedback = _build_live_search_action_feedback(request)
+    has_search_filters = any(
+        (
+            normalized_search_query,
+            normalized_org,
+            normalized_closed_from,
+            normalized_closed_to,
+        )
+    )
+    summary_stats = [
+        {"label": "검색 결과", "value": "0"},
+        {"label": "이미 저장됨", "value": "0"},
+        {"label": "원문 링크", "value": "0"},
+        {"label": "조회 방식", "value": "외부 API"},
+    ]
+    empty_state_message = (
+        "검색어 또는 기관 조건을 입력해 실시간 API 검색을 시작하세요."
+        if not has_search_filters
+        else "조건에 맞는 공고가 없습니다. 검색 조건이나 기간을 조정해보세요."
+    )
+    return {
+        "page_vm": {"bids": [], "total_count": 0},
+        "last_synced_at": "-",
+        "active_nav": "bids",
+        "selected_bid": None,
+        "summary_stats": summary_stats,
+        "search_query": normalized_search_query,
+        "org_filter": normalized_org,
+        "closed_from": normalized_closed_from,
+        "closed_to": normalized_closed_to,
+        "sort_value": normalized_sort,
+        "sort_options": BID_SORT_OPTIONS,
+        "page_size": LIVE_SEARCH_PAGE_SIZE,
+        "page_size_options": [LIVE_SEARCH_PAGE_SIZE],
+        "empty_state_message": empty_state_message,
+        "action_feedback": action_feedback,
+        "should_autoload": has_search_filters,
+    }
+
+
+def _build_search_item_payload(
+    form: dict[str, str],
+) -> tuple[dict[str, str | None], str]:
+    operation_name = (
+        form.get("source_api_name") or "getBidPblancListInfoServc"
+    ).strip()
+    payload = {
+        "bidNtceNo": form.get("bid_no"),
+        "bidNtceOrd": form.get("bid_seq"),
+        "bidNtceNm": form.get("title"),
+        "ntceInsttNm": form.get("notice_org"),
+        "dminsttNm": form.get("demand_org"),
+        "bidNtceDt": form.get("posted_at_raw"),
+        "rgstDt": form.get("posted_at_raw"),
+        "bidClseDt": form.get("closed_at_raw"),
+        "opengDt": form.get("opened_at_raw"),
+        "asignBdgtAmt": form.get("budget_amount_raw"),
+        "bdgtAmt": form.get("budget_amount_raw"),
+        "presmptPrce": form.get("budget_amount_raw"),
+        "bidNtceDtlUrl": form.get("detail_url"),
+        "bsnsDivNm": form.get("business_type"),
+        "bidNtceBssCdNm": form.get("business_type"),
+        "ntceKindNm": form.get("raw_notice_version_type"),
+        "chgNtceRsn": form.get("raw_version_reason"),
+        "rmrk": form.get("raw_version_reason"),
+    }
+    return payload, operation_name
+
+
+def _save_favorite_bid_from_search(form: dict[str, str]) -> str:
+    payload, operation_name = _build_search_item_payload(form)
+    client = G2BBidPublicInfoClient()
+    try:
+        with Session(engine) as session:
+            bid_id = G2BBidPublicInfoSyncService(
+                session=session,
+                client=client,
+            ).upsert_bid_item(
+                item=cast(dict[str, object], payload),
+                operation_name=operation_name,
+                favorite=True,
+            )
+            bid = session.get(Bid, bid_id)
+            if bid is None:
+                raise KeyError(bid_id)
+            bid.is_favorite = True
+            if bid.status in {"", "collected"}:
+                bid.status = BID_STATUS_FAVORITE
+            session.add(bid)
+            detail = session.get(BidDetail, bid_id)
+            if detail is None:
+                detail = BidDetail(bid_id=bid_id)
+            if not detail.raw_api_data:
+                detail.raw_api_data = json.dumps(
+                    payload, ensure_ascii=False, sort_keys=True
+                )
+            detail.detail_url = form.get("detail_url") or detail.detail_url
+            detail.collected_at = datetime.now().isoformat()
+            session.add(detail)
+            session.commit()
+            return bid_id
+    finally:
+        client.close()
+
+
+def execute_favorite_initial_refresh_job(job_id: int, bid_id: str) -> None:
+    queued_at = _now_text()
+    _update_sync_log(
+        job_id=job_id,
+        status="running",
+        message="favorite bid initial refresh running",
+        finished_at=None,
+        metadata=_favorite_initial_refresh_metadata(
+            "running",
+            "queued",
+            detail_started_at=queued_at,
+        ),
+    )
+
+    public_client = G2BBidPublicInfoClient()
+    contract_client = G2BContractProcessClient()
+    detail_items = 0
+    contract_items = 0
+    detail_started_at = queued_at
+    detail_finished_at: str | None = None
+    contract_started_at: str | None = None
+    contract_finished_at: str | None = None
+
+    try:
+        with Session(engine) as session:
+            detail_result = G2BBidDetailEnrichmentService(
+                session=session,
+                client=public_client,
+            ).enrich_bids(
+                bid_ids=[bid_id],
+                operations=PHASE2_DETAIL_ENRICHMENT_OPERATIONS,
+                selection_mode="targeted",
+                recent_days=7,
+            )
+            detail_items = detail_result.fetched_item_count
+            detail_finished_at = _now_text()
+            contract_started_at = detail_finished_at
+            _update_sync_log(
+                job_id=job_id,
+                status="running",
+                message="favorite bid initial refresh running",
+                finished_at=None,
+                metadata=_favorite_initial_refresh_metadata(
+                    "completed",
+                    "running",
+                    detail_items=detail_items,
+                    detail_started_at=detail_started_at,
+                    detail_finished_at=detail_finished_at,
+                    contract_started_at=contract_started_at,
+                ),
+            )
+            contract_result = G2BContractProcessService(
+                session=session,
+                client=contract_client,
+            ).enrich_timelines(bid_ids=[bid_id])
+            contract_items = contract_result.fetched_item_count
+            contract_finished_at = _now_text()
+
+        _update_sync_log(
+            job_id=job_id,
+            status="completed",
+            message=(f"detail_items={detail_items} contract_items={contract_items}"),
+            finished_at=datetime.now(),
+            metadata=_favorite_initial_refresh_metadata(
+                "completed",
+                "completed",
+                detail_items=detail_items,
+                contract_items=contract_items,
+                detail_started_at=detail_started_at,
+                detail_finished_at=detail_finished_at,
+                contract_started_at=contract_started_at,
+                contract_finished_at=contract_finished_at,
+            ),
+        )
+    except Exception as exc:
+        failed_step = (
+            "detail_enrichment" if detail_finished_at is None else "contract_process"
+        )
+        _update_sync_log(
+            job_id=job_id,
+            status="failed",
+            message=build_sync_failure_message(exc),
+            finished_at=datetime.now(),
+            metadata=_favorite_initial_refresh_metadata(
+                "failed" if detail_finished_at is None else "completed",
+                "failed" if detail_finished_at is not None else "queued",
+                detail_items=detail_items,
+                contract_items=contract_items,
+                detail_started_at=detail_started_at,
+                detail_finished_at=detail_finished_at,
+                contract_started_at=contract_started_at,
+                contract_finished_at=contract_finished_at,
+                failed_step=failed_step,
+                error_reason=str(exc),
+            ),
+        )
+    finally:
+        public_client.close()
+        contract_client.close()
 
 
 def get_basic_page_context(active_nav: str) -> dict[str, object]:
@@ -1511,6 +1796,38 @@ def queue_bid_resync_job(bid_id: str) -> QueuedSyncResponse:
         )
 
 
+def queue_favorite_initial_refresh_job(bid_id: str) -> QueuedSyncResponse:
+    init_db()
+    started_at = datetime.now()
+    metadata = {
+        "steps": [
+            {"name": "detail_enrichment", "status": "queued"},
+            {"name": "contract_process", "status": "queued"},
+        ]
+    }
+    with Session(engine) as session:
+        log = SyncJobLog(
+            job_type="favorite_bid_initial_refresh",
+            target=bid_id,
+            status="queued",
+            started_at=started_at,
+            finished_at=None,
+            message="favorite bid initial refresh queued",
+            metadata_json=json.dumps(metadata, ensure_ascii=False),
+        )
+        session.add(log)
+        session.commit()
+        session.refresh(log)
+        return QueuedSyncResponse(
+            job_id=log.id or 0,
+            job_type=log.job_type,
+            target=log.target,
+            status="queued",
+            message=log.message,
+            started_at=started_at.strftime("%Y-%m-%d %H:%M"),
+        )
+
+
 def _update_sync_log(
     *,
     job_id: int,
@@ -1571,6 +1888,44 @@ def _resync_metadata(
                 "attachment_count": attachments,
                 "started_at": crawl_started_at,
                 "finished_at": crawl_finished_at,
+            },
+        ]
+    }
+    if failed_step is not None:
+        metadata["failed_step"] = failed_step
+    if error_reason is not None:
+        metadata["error_reason"] = error_reason
+    return metadata
+
+
+def _favorite_initial_refresh_metadata(
+    detail_status: str,
+    contract_status: str,
+    *,
+    detail_items: int = 0,
+    contract_items: int = 0,
+    detail_started_at: str | None = None,
+    detail_finished_at: str | None = None,
+    contract_started_at: str | None = None,
+    contract_finished_at: str | None = None,
+    failed_step: str | None = None,
+    error_reason: str | None = None,
+) -> dict[str, object]:
+    metadata: dict[str, object] = {
+        "steps": [
+            {
+                "name": "detail_enrichment",
+                "status": detail_status,
+                "fetched_item_count": detail_items,
+                "started_at": detail_started_at,
+                "finished_at": detail_finished_at,
+            },
+            {
+                "name": "contract_process",
+                "status": contract_status,
+                "fetched_item_count": contract_items,
+                "started_at": contract_started_at,
+                "finished_at": contract_finished_at,
             },
         ]
     }
@@ -2028,6 +2383,56 @@ def health() -> JSONResponse:
                 },
             },
         )
+
+
+@app.get(
+    "/api/v1/search/bids",
+    response_model=LiveBidSearchApiResponse,
+    tags=["bids"],
+    summary="Search live bids",
+    description=(
+        "외부 G2B API를 직접 호출해 실시간 검색 결과를 JSON으로 반환합니다. "
+        "이 endpoint는 전체 결과를 DB에 저장하지 않고 관심 공고 등록 전 탐색 용도로 사용합니다."
+    ),
+)
+def search_live_bids_api(
+    q: str | None = None,
+    org: str | None = None,
+    closed_from: str | None = None,
+    closed_to: str | None = None,
+    sort: str = Query(
+        default=DEFAULT_BIDS_SORT,
+        pattern="^(updated_at|closed_at_asc|closed_at_desc|posted_at|notice_org|title)$",
+    ),
+):
+    normalized_sort, _, _ = _normalize_bids_sort(sort)
+    with Session(engine) as session:
+        client = G2BBidPublicInfoClient()
+        try:
+            items = G2BBidSearchService(client=client, session=session).search_bids(
+                search_query=q,
+                org=org,
+                closed_from=closed_from,
+                closed_to=closed_to,
+                sort=normalized_sort,
+                limit=LIVE_SEARCH_PAGE_SIZE,
+            )
+        finally:
+            client.close()
+
+    return LiveBidSearchApiResponse(
+        data=LiveBidSearchDataResponse(
+            items=[LiveBidSearchItemResponse.model_validate(item) for item in items]
+        ),
+        meta=LiveBidSearchMetaResponse(
+            total=len(items),
+            search_query=(q or "").strip(),
+            org=(org or "").strip(),
+            closed_from=(closed_from or "").strip(),
+            closed_to=(closed_to or "").strip(),
+            sort=normalized_sort,
+        ),
+    )
 
 
 @app.get(
@@ -2702,33 +3107,20 @@ def root(request: Request):
 @app.get("/bids", response_class=HTMLResponse, include_in_schema=False)
 def bids_page(request: Request):
     search_query = request.query_params.get("q")
-    status = request.query_params.get("status")
-    favorites_only = request.query_params.get("favorites") in {"1", "true", "on"}
-    include_versions = request.query_params.get("include_versions") in {
-        "1",
-        "true",
-        "on",
-    }
     org = request.query_params.get("org")
     closed_from = request.query_params.get("closed_from")
     closed_to = request.query_params.get("closed_to")
     sort = request.query_params.get("sort")
-    page = _normalize_positive_int(request.query_params.get("page"), 1)
-    page_size = _normalize_bids_page_size(request.query_params.get("page_size"))
     return templates.TemplateResponse(
         request=request,
         name="pages/bids/index.html",
-        context=get_bids_page_context(
+        context=get_live_bids_page_context(
+            request=request,
             search_query=search_query,
-            status=status,
-            favorites_only=favorites_only,
-            include_versions=include_versions,
             org=org,
             closed_from=closed_from,
             closed_to=closed_to,
             sort=sort,
-            page=page,
-            page_size=page_size,
         ),
     )
 
@@ -2808,34 +3200,73 @@ def operations_page(request: Request):
 @app.get("/partials/bids/table", response_class=HTMLResponse, include_in_schema=False)
 def bids_table_partial(request: Request):
     search_query = request.query_params.get("q")
-    status = request.query_params.get("status")
-    favorites_only = request.query_params.get("favorites") in {"1", "true", "on"}
-    include_versions = request.query_params.get("include_versions") in {
-        "1",
-        "true",
-        "on",
-    }
     org = request.query_params.get("org")
     closed_from = request.query_params.get("closed_from")
     closed_to = request.query_params.get("closed_to")
     sort = request.query_params.get("sort")
-    page = _normalize_positive_int(request.query_params.get("page"), 1)
-    page_size = _normalize_bids_page_size(request.query_params.get("page_size"))
     return templates.TemplateResponse(
         request=request,
-        name="partials/bids/_bid_table.html",
-        context=get_bids_page_context(
+        name="partials/bids/_live_bid_table.html",
+        context=get_live_bids_page_context(
+            request=request,
             search_query=search_query,
-            status=status,
-            favorites_only=favorites_only,
-            include_versions=include_versions,
             org=org,
             closed_from=closed_from,
             closed_to=closed_to,
             sort=sort,
-            page=page,
-            page_size=page_size,
         ),
+    )
+
+
+@app.post("/bids/favorite-from-search", include_in_schema=False)
+async def favorite_from_search(request: Request, background_tasks: BackgroundTasks):
+    form = await _parse_request_form_data(request)
+    search_query = (form.get("q") or "").strip()
+    org = (form.get("org") or "").strip()
+    closed_from = (form.get("closed_from") or "").strip()
+    closed_to = (form.get("closed_to") or "").strip()
+    sort_value, _, _ = _normalize_bids_sort(form.get("sort"))
+    redirect_params = _build_live_search_query_params(
+        search_query=search_query,
+        org=org,
+        closed_from=closed_from,
+        closed_to=closed_to,
+        sort=sort_value,
+    )
+    try:
+        bid_id = _save_favorite_bid_from_search(form)
+        redirect_params["saved_bid_id"] = bid_id
+        queued_job: QueuedSyncResponse | None = None
+        if _should_run_background_favorite_refresh():
+            queued_job = queue_favorite_initial_refresh_job(bid_id)
+            background_tasks.add_task(
+                execute_favorite_initial_refresh_job,
+                queued_job.job_id,
+                bid_id,
+            )
+        if "application/json" in request.headers.get("accept", ""):
+            return JSONResponse(
+                {
+                    "success": True,
+                    "bid_id": bid_id,
+                    "message": f"{bid_id} 공고를 관심 공고로 저장했습니다.",
+                    "favorites_url": "/favorites",
+                    "job_id": queued_job.job_id if queued_job is not None else None,
+                }
+            )
+    except Exception as exc:
+        if "application/json" in request.headers.get("accept", ""):
+            return JSONResponse(
+                {
+                    "success": False,
+                    "message": str(exc),
+                },
+                status_code=500,
+            )
+        redirect_params["search_error"] = str(exc)
+    return RedirectResponse(
+        url=_build_url_with_query("/bids", redirect_params),
+        status_code=303,
     )
 
 

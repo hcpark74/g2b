@@ -524,6 +524,45 @@ class BidListApiResponse(BaseModel):
     }
 
 
+class LiveBidSearchItemResponse(BaseModel):
+    bid_id: str
+    bid_no: str
+    bid_seq: str
+    display_bid_no: str
+    title: str
+    notice_org: str | None = None
+    demand_org: str | None = None
+    business_type: str | None = None
+    posted_at: str | None = None
+    closed_at: str | None = None
+    opened_at: str | None = None
+    budget_amount: str | None = None
+    detail_url: str | None = None
+    source_api_name: str | None = None
+    favorite: bool = False
+
+
+class LiveBidSearchDataResponse(BaseModel):
+    items: list[LiveBidSearchItemResponse]
+
+
+class LiveBidSearchMetaResponse(BaseModel):
+    total: int
+    search_query: str
+    org: str
+    closed_from: str
+    closed_to: str
+    sort: str
+    source: str = "external_api"
+
+
+class LiveBidSearchApiResponse(BaseModel):
+    success: bool = True
+    data: LiveBidSearchDataResponse
+    meta: LiveBidSearchMetaResponse
+    error: None = None
+
+
 class BidDetailApiResponse(BaseModel):
     success: bool = True
     data: BidDetailResponseItem

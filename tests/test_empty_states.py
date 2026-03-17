@@ -26,6 +26,15 @@ def empty_sqlmodel_client(
     db_module.init_db()
     main_module = _reload_module("app.main")
 
+    class EmptySearchClient:
+        def close(self) -> None:
+            return None
+
+        def fetch_bid_list(self, operation_name: str, **_: object):
+            return []
+
+    monkeypatch.setattr(main_module, "G2BBidPublicInfoClient", EmptySearchClient)
+
     with TestClient(main_module.app) as client:
         yield client
 
@@ -36,7 +45,9 @@ def test_bids_page_shows_empty_state_when_no_bids(
     response = empty_sqlmodel_client.get("/bids")
 
     assert response.status_code == 200
-    assert "표시할 공고가 없습니다." in response.text
+    assert (
+        "검색어 또는 기관 조건을 입력해 실시간 API 검색을 시작하세요." in response.text
+    )
 
 
 def test_bids_page_shows_filtered_empty_state_when_filters_applied(
@@ -45,7 +56,10 @@ def test_bids_page_shows_filtered_empty_state_when_filters_applied(
     response = empty_sqlmodel_client.get("/bids?q=없는공고")
 
     assert response.status_code == 200
-    assert "조건에 맞는 공고가 없습니다. 필터를 조정해보세요." in response.text
+    assert (
+        "조건에 맞는 공고가 없습니다. 검색 조건이나 기간을 조정해보세요."
+        in response.text
+    )
 
 
 def test_favorites_page_shows_empty_state_when_no_favorites(

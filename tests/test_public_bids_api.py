@@ -69,6 +69,80 @@ def test_list_bids_api_returns_wrapped_json_payload(public_client: TestClient) -
     assert payload["data"]["items"][0]["bid_id"] == "R26BK00000002-000"
 
 
+def test_live_search_bids_api_returns_external_results(
+    public_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    main_module = importlib.import_module("app.main")
+
+    class StubClient:
+        def close(self) -> None:
+            return None
+
+        def fetch_bid_list(self, operation_name: str, **_: object):
+            return [
+                {
+                    "bidNtceNo": "R26BK55555555",
+                    "bidNtceOrd": "000",
+                    "bidNtceNm": "AI 플랫폼 통합 유지보수",
+                    "ntceInsttNm": "조달청",
+                    "dminsttNm": "한국지능정보원",
+                    "bidNtceDt": "202603130900",
+                    "bidClseDt": "202603201800",
+                    "opengDt": "202603201900",
+                    "asignBdgtAmt": "120000000",
+                    "bidNtceDtlUrl": "https://example.com/live/55555555",
+                }
+            ]
+
+    monkeypatch.setattr(main_module, "G2BBidPublicInfoClient", StubClient)
+
+    response = public_client.get("/api/v1/search/bids", params={"q": "AI"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["meta"]["source"] == "external_api"
+    assert payload["meta"]["search_query"] == "AI"
+    assert payload["meta"]["total"] == 1
+    assert payload["data"]["items"][0]["bid_id"] == "R26BK55555555-000"
+    assert payload["data"]["items"][0]["title"] == "AI 플랫폼 통합 유지보수"
+
+
+def test_live_search_bids_api_marks_existing_favorites(
+    sqlmodel_public_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    main_module = importlib.import_module("app.main")
+
+    class StubClient:
+        def close(self) -> None:
+            return None
+
+        def fetch_bid_list(self, operation_name: str, **_: object):
+            return [
+                {
+                    "bidNtceNo": "R26BK00000001",
+                    "bidNtceOrd": "000",
+                    "bidNtceNm": "한국지능정보원 AI 데이터 서비스 플랫폼 구축",
+                    "ntceInsttNm": "조달청",
+                    "dminsttNm": "한국지능정보원",
+                    "bidNtceDt": "202603121100",
+                    "bidClseDt": "202603181500",
+                    "opengDt": "202603181600",
+                    "asignBdgtAmt": "1500000000",
+                    "bidNtceDtlUrl": "https://example.com/live/1",
+                }
+            ]
+
+    monkeypatch.setattr(main_module, "G2BBidPublicInfoClient", StubClient)
+
+    response = sqlmodel_public_client.get("/api/v1/search/bids", params={"q": "AI"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["data"]["items"][0]["bid_id"] == "R26BK00000001-000"
+    assert payload["data"]["items"][0]["favorite"] is True
+
+
 def test_list_bids_api_filters_results(public_client: TestClient) -> None:
     response = public_client.get(
         "/api/v1/bids",
@@ -1161,6 +1235,7 @@ def test_openapi_includes_public_bids_endpoints(public_client: TestClient) -> No
 
     assert response.status_code == 200
     schema = response.json()
+    assert "/api/v1/search/bids" in schema["paths"]
     assert "/api/v1/bids" in schema["paths"]
     assert "/api/v1/bids/export" in schema["paths"]
     assert "/api/v1/bids/{bid_id}" in schema["paths"]
@@ -1170,6 +1245,9 @@ def test_openapi_includes_public_bids_endpoints(public_client: TestClient) -> No
     assert "/api/v1/bids/{bid_id}/timeline" in schema["paths"]
     assert "/api/v1/bids/{bid_id}/resync" in schema["paths"]
     assert "/api/v1/jobs/{job_id}" in schema["paths"]
+    assert (
+        schema["paths"]["/api/v1/search/bids"]["get"]["summary"] == "Search live bids"
+    )
     assert schema["paths"]["/api/v1/bids"]["get"]["summary"] == "List bids"
     assert schema["paths"]["/api/v1/bids/export"]["get"]["summary"] == "Export bids"
     assert (

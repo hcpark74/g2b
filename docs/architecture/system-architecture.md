@@ -160,6 +160,8 @@
 
 ## 4. 데이터 흐름
 
+현재 운영 구현은 전체 공고를 내부 DB에 적재한 뒤 검색하는 흐름을 일부 포함하지만, 목표 방향은 `외부 API 검색 + 관심 공고 중심 영속화`다. 상세 전환안은 `docs/architecture/favorite-centric-search-architecture.md`를 따른다.
+
 ```text
 [발주계획/사전규격/조달요청]
         ->

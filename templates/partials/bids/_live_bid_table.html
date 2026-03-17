@@ -1,0 +1,100 @@
+<div class="d-flex flex-column gap-2">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 app-surface rounded shadow-sm p-2 border sticky-toolbar">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <span class="section-title">실시간 검색 결과</span>
+      <span class="toolbar-chip">현재 조건 결과 {{ page_vm.total_count | default(0) }}건</span>
+    </div>
+    <form class="d-flex gap-2 align-items-center flex-wrap" action="/bids" method="get">
+      <input type="hidden" name="q" value="{{ search_query | default('', true) }}">
+      <input type="hidden" name="org" value="{{ org_filter | default('', true) }}">
+      <input type="hidden" name="closed_from" value="{{ closed_from | default('', true) }}">
+      <input type="hidden" name="closed_to" value="{{ closed_to | default('', true) }}">
+      <select class="form-select form-select-sm" name="sort" style="width: 150px;">
+        {% for sort_key, sort_label in sort_options | default([]) %}
+          <option value="{{ sort_key }}" {% if sort_value == sort_key %}selected{% endif %}>{{ sort_label }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-outline-secondary btn-sm" type="submit">적용</button>
+    </form>
+  </div>
+
+  <div class="app-surface rounded shadow-sm p-2 border">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0 app-table">
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>저장</th>
+            <th>업무</th>
+            <th>공고번호</th>
+            <th>공고명</th>
+            <th>공고기관</th>
+            <th>수요기관</th>
+            <th>게시일</th>
+            <th>마감일</th>
+            <th>예산</th>
+            <th>출처</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bid in page_vm.bids | default([]) %}
+            <tr>
+              <td>{{ bid.row_number }}</td>
+              <td>
+                {% if bid.favorite %}
+                  <span class="badge text-bg-warning">관심 공고</span>
+                {% else %}
+                  <form method="post" action="/bids/favorite-from-search" class="d-inline">
+                    <input type="hidden" name="q" value="{{ search_query | default('', true) }}">
+                    <input type="hidden" name="org" value="{{ org_filter | default('', true) }}">
+                    <input type="hidden" name="closed_from" value="{{ closed_from | default('', true) }}">
+                    <input type="hidden" name="closed_to" value="{{ closed_to | default('', true) }}">
+                    <input type="hidden" name="sort" value="{{ sort_value | default('updated_at', true) }}">
+                    <input type="hidden" name="bid_no" value="{{ bid.bid_no }}">
+                    <input type="hidden" name="bid_seq" value="{{ bid.bid_seq }}">
+                    <input type="hidden" name="title" value="{{ bid.title }}">
+                    <input type="hidden" name="notice_org" value="{{ bid.notice_org }}">
+                    <input type="hidden" name="demand_org" value="{{ bid.demand_org }}">
+                    <input type="hidden" name="posted_at_raw" value="{{ bid.posted_at }}">
+                    <input type="hidden" name="closed_at_raw" value="{{ bid.closed_at }}">
+                    <input type="hidden" name="opened_at_raw" value="{{ bid.opened_at }}">
+                    <input type="hidden" name="budget_amount_raw" value="{{ bid.budget_amount_value | default('') }}">
+                    <input type="hidden" name="detail_url" value="{{ bid.detail_url }}">
+                    <input type="hidden" name="business_type" value="{{ bid.business_type }}">
+                    <input type="hidden" name="source_api_name" value="{{ bid.source_api_name }}">
+                    <input type="hidden" name="raw_notice_version_type" value="{{ bid.raw_notice_version_type }}">
+                    <input type="hidden" name="raw_version_reason" value="{{ bid.raw_version_reason }}">
+                    <button class="btn btn-sm btn-outline-warning" type="submit">관심 등록</button>
+                  </form>
+                {% endif %}
+              </td>
+              <td>{{ bid.business_type }}</td>
+              <td>{{ bid.display_bid_no }}</td>
+              <td>
+                <div class="fw-semibold">{{ bid.title }}</div>
+              </td>
+              <td>{{ bid.notice_org }}</td>
+              <td>{{ bid.demand_org }}</td>
+              <td>{{ bid.posted_at }}</td>
+              <td>{{ bid.closed_at }}</td>
+              <td>{{ bid.budget_amount }}</td>
+              <td><span class="small text-secondary">{{ bid.source_api_name }}</span></td>
+              <td class="text-end">
+                {% if bid.detail_url %}
+                  <a class="btn btn-sm btn-outline-secondary" href="{{ bid.detail_url }}" target="_blank" rel="noreferrer">원문</a>
+                {% else %}
+                  <span class="small text-secondary">-</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="12" class="text-center text-secondary py-4">{{ empty_state_message | default('표시할 공고가 없습니다.', true) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

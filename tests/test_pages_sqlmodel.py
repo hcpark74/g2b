@@ -34,6 +34,56 @@ def sqlmodel_client(
     seed_module.seed_bids()
     main_module = _reload_module("app.main")
 
+    class StubSearchClient:
+        def close(self) -> None:
+            return None
+
+        def fetch_bid_list(self, operation_name: str, **kwargs: object):
+            bid_no = kwargs.get("bid_ntce_no")
+            items = [
+                {
+                    "bidNtceNo": "R26BK00000001",
+                    "bidNtceOrd": "000",
+                    "bidNtceNm": "전남소방본부 구급소모품 구매",
+                    "ntceInsttNm": "전라남도",
+                    "dminsttNm": "전남소방본부",
+                    "bidNtceDt": "202603130900",
+                    "bidClseDt": "202603201800",
+                    "opengDt": "202603201900",
+                    "asignBdgtAmt": "150000000",
+                    "bidNtceDtlUrl": "https://example.com/bids/1",
+                },
+                {
+                    "bidNtceNo": "R26BK00000002",
+                    "bidNtceOrd": "000",
+                    "bidNtceNm": "2026년 중소기업 인력지원사업 종합관리시스템 유지보수 용역",
+                    "ntceInsttNm": "조달청",
+                    "dminsttNm": "중소기업기술정보진흥원",
+                    "bidNtceDt": "202603140900",
+                    "bidClseDt": "202603221800",
+                    "opengDt": "202603221900",
+                    "asignBdgtAmt": "220000000",
+                    "bidNtceDtlUrl": "https://example.com/bids/2",
+                },
+                {
+                    "bidNtceNo": "R26BK00000003",
+                    "bidNtceOrd": "000",
+                    "bidNtceNm": "AI 기반 행정지원 플랫폼 구축",
+                    "ntceInsttNm": "조달청",
+                    "dminsttNm": "한국지능정보원",
+                    "bidNtceDt": "202603150900",
+                    "bidClseDt": "202603241800",
+                    "opengDt": "202603241900",
+                    "asignBdgtAmt": "320000000",
+                    "bidNtceDtlUrl": "https://example.com/bids/3",
+                },
+            ]
+            if isinstance(bid_no, str) and bid_no:
+                items = [item for item in items if item["bidNtceNo"] == bid_no]
+            return items
+
+    monkeypatch.setattr(main_module, "G2BBidPublicInfoClient", StubSearchClient)
+
     with TestClient(main_module.app) as client:
         yield client
 
@@ -53,6 +103,32 @@ def auto_backend_client(
     seed_module = _reload_module("app.seed_bids")
     seed_module.seed_bids()
     main_module = _reload_module("app.main")
+
+    class StubSearchClient:
+        def close(self) -> None:
+            return None
+
+        def fetch_bid_list(self, operation_name: str, **kwargs: object):
+            bid_no = kwargs.get("bid_ntce_no")
+            items = [
+                {
+                    "bidNtceNo": "R26BK00000001",
+                    "bidNtceOrd": "000",
+                    "bidNtceNm": "전남소방본부 구급소모품 구매",
+                    "ntceInsttNm": "전라남도",
+                    "dminsttNm": "전남소방본부",
+                    "bidNtceDt": "202603130900",
+                    "bidClseDt": "202603201800",
+                    "opengDt": "202603201900",
+                    "asignBdgtAmt": "150000000",
+                    "bidNtceDtlUrl": "https://example.com/bids/1",
+                }
+            ]
+            if isinstance(bid_no, str) and bid_no:
+                items = [item for item in items if item["bidNtceNo"] == bid_no]
+            return items
+
+    monkeypatch.setattr(main_module, "G2BBidPublicInfoClient", StubSearchClient)
 
     with TestClient(main_module.app) as client:
         yield client
@@ -139,8 +215,10 @@ def test_sqlmodel_bids_page_renders(sqlmodel_client: TestClient) -> None:
 
     assert response.status_code == 200
     assert "통합 검색 결과" in response.text
-    assert "현재 조건 결과 3건" in response.text
-    assert "마지막 동기화: 2026-03-13 10:00" in response.text
+    assert "실시간 검색 결과" in response.text
+    assert (
+        "검색어 또는 기관 조건을 입력해 실시간 API 검색을 시작하세요." in response.text
+    )
 
 
 def test_sqlmodel_drawer_uses_summary_text_without_detail_link(
@@ -507,12 +585,13 @@ def test_sqlmodel_favorites_page_renders_seeded_favorites(
 
 
 def test_sqlmodel_pages_use_display_bid_no_policy(sqlmodel_client: TestClient) -> None:
-    bids_response = sqlmodel_client.get("/bids")
+    bids_response = sqlmodel_client.get("/bids?q=구급소모품")
     favorites_response = sqlmodel_client.get("/favorites")
 
     assert bids_response.status_code == 200
     assert favorites_response.status_code == 200
-    assert "R26BK00000001-000" in bids_response.text
+    assert 'value="구급소모품"' in bids_response.text
+    assert "if (shouldAutoload) runSearch()" in bids_response.text
     assert "R26BK00000001-000" in favorites_response.text
 
 
@@ -598,18 +677,25 @@ def test_sqlmodel_bids_page_prefers_latest_effective_version(
 
     with Session(db_module.engine) as session:
         ids = seed_bid_version_chain(session, bid_no="R26BK90000999")
+        for bid_id in (
+            ids["original_bid_id"],
+            ids["revision_bid_id"],
+            ids["cancellation_bid_id"],
+        ):
+            bid = session.get(Bid, bid_id)
+            assert bid is not None
+            bid.is_favorite = True
+            session.add(bid)
+        session.commit()
 
     main_module = _reload_module("app.main")
     with TestClient(main_module.app) as client:
-        response = client.get("/partials/bids/table")
+        response = client.get("/favorites")
 
     assert response.status_code == 200
     assert ids["revision_bid_id"] in response.text
     assert ids["cancellation_bid_id"] not in response.text
     assert "정정공고" in response.text
-    assert (
-        "현재 보고 있는 공고는 검토 기준이 되는 최신 유효 차수입니다." in response.text
-    )
 
 
 def test_sqlmodel_drawer_shows_version_badges_and_history(
@@ -723,9 +809,10 @@ def test_auto_backend_prefers_seeded_sqlmodel_data(
 
     assert response.status_code == 200
     assert "통합 검색 결과" in response.text
-    assert "R26BK00000001-000" in response.text
-    assert "전남소방본부 구급소모품 구매" in response.text
-    assert "마지막 동기화: 2026-03-13 10:00" in response.text
+    assert "실시간 검색 결과" in response.text
+    assert (
+        "검색어 또는 기관 조건을 입력해 실시간 API 검색을 시작하세요." in response.text
+    )
 
 
 def test_sqlmodel_bids_page_filters_by_query_string(
@@ -734,49 +821,41 @@ def test_sqlmodel_bids_page_filters_by_query_string(
     response = sqlmodel_client.get("/bids?q=구급소모품")
 
     assert response.status_code == 200
-    assert "전남소방본부 구급소모품 구매" in response.text
-    assert (
-        "2026년 중소기업 인력지원사업 종합관리시스템 유지보수 용역" not in response.text
-    )
+    assert 'value="구급소모품"' in response.text
+    assert "if (shouldAutoload) runSearch()" in response.text
 
 
-def test_sqlmodel_bids_page_filters_favorites_only(sqlmodel_client: TestClient) -> None:
-    response = sqlmodel_client.get("/bids?favorites=1")
+def test_live_bids_page_filters_by_org(sqlmodel_client: TestClient) -> None:
+    response = sqlmodel_client.get("/bids?org=전남소방")
 
     assert response.status_code == 200
-    assert "R26BK00000001-000" in response.text
-    assert "R26BK00000003-000" in response.text
-    assert "R26BK00000002-000" not in response.text
+    assert 'value="전남소방"' in response.text
+    assert "if (shouldAutoload) runSearch()" in response.text
 
 
 def test_bids_filter_bar_preserves_query_params(sqlmodel_client: TestClient) -> None:
     response = sqlmodel_client.get(
-        "/bids?q=구급소모품&org=전남소방&status=collected&favorites=1&include_versions=1&closed_from=2026-03-18T00:00&closed_to=2026-03-20T23:59"
+        "/bids?q=구급소모품&org=전남소방&closed_from=2026-03-18T00:00&closed_to=2026-03-20T23:59"
     )
 
     assert response.status_code == 200
     assert 'value="구급소모품"' in response.text
     assert 'value="전남소방"' in response.text
-    assert '<option value="collected" selected>' in response.text
-    assert 'id="favorites-only"' in response.text
-    assert 'id="include-versions"' in response.text
     assert 'name="closed_from" value="2026-03-18T00:00"' in response.text
     assert 'name="closed_to" value="2026-03-20T23:59"' in response.text
-    assert "checked" in response.text
 
 
 def test_bids_toolbar_preserves_sort_and_page_size(sqlmodel_client: TestClient) -> None:
-    response = sqlmodel_client.get("/bids?sort=closed_at_asc&page_size=50")
+    response = sqlmodel_client.get("/bids?q=AI&sort=closed_at_asc")
 
     assert response.status_code == 200
-    assert 'name="sort" value="closed_at_asc"' in response.text
     assert (
         '<option value="closed_at_asc" selected>마감일 빠른순</option>' in response.text
     )
-    assert '<option value="50" selected>50</option>' in response.text
+    assert 'value="AI"' in response.text
 
 
-def test_bids_table_partial_renders_pagination_links(
+def test_bids_table_partial_renders_live_results(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db_path = tmp_path / "pagination-page.db"
@@ -789,31 +868,39 @@ def test_bids_table_partial_renders_pagination_links(
     _reload_module("app.models")
     db_module.init_db()
 
-    with Session(db_module.engine) as session:
-        for index in range(30):
-            session.add(
-                Bid(
-                    bid_id=f"R26BK9900{index:04d}-000",
-                    bid_no=f"R26BK9900{index:04d}",
-                    bid_seq="000",
-                    title=f"페이지 테스트 공고 {index:02d}",
-                    posted_at=datetime(2026, 3, 1, 9, 0),
-                    last_changed_at=datetime(2026, 3, 1, 9, 0),
-                )
-            )
-        session.commit()
-
     main_module = _reload_module("app.main")
+
+    class StubSearchClient:
+        def close(self) -> None:
+            return None
+
+        def fetch_bid_list(self, operation_name: str, **_: object):
+            return [
+                {
+                    "bidNtceNo": "R26BK99000001",
+                    "bidNtceOrd": "000",
+                    "bidNtceNm": "페이지 테스트 공고 01",
+                    "ntceInsttNm": "조달청",
+                    "dminsttNm": "테스트기관",
+                    "bidNtceDt": "202603010900",
+                    "bidClseDt": "202603051800",
+                    "opengDt": "202603051900",
+                    "asignBdgtAmt": "10000000",
+                    "bidNtceDtlUrl": "https://example.com/page-1",
+                }
+            ]
+
+    monkeypatch.setattr(main_module, "G2BBidPublicInfoClient", StubSearchClient)
+
     with TestClient(main_module.app) as client:
-        response = client.get("/partials/bids/table?page=2&page_size=25&sort=posted_at")
+        response = client.get("/partials/bids/table?q=페이지&sort=posted_at")
 
     assert response.status_code == 200
-    assert 'href="/bids?sort=posted_at&amp;page=1&amp;page_size=25"' in response.text
+    assert "실시간 검색 결과" in response.text
     assert (
-        'hx-get="/partials/bids/table?sort=posted_at&amp;page=1&amp;page_size=25"'
+        "조건에 맞는 공고가 없습니다. 검색 조건이나 기간을 조정해보세요."
         in response.text
     )
-    assert '<span class="page-link">2</span>' in response.text
 
 
 def test_bids_table_favorite_toggle_partial_updates_favorites(
@@ -828,6 +915,154 @@ def test_bids_table_favorite_toggle_partial_updates_favorites(
     favorites_response = sqlmodel_client.get("/favorites")
     assert favorites_response.status_code == 200
     assert "R26BK00000002-000" in favorites_response.text
+
+
+def test_favorite_from_live_search_persists_bid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "favorite-from-search.db"
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("BID_DATA_BACKEND", "sqlmodel")
+    monkeypatch.setenv("DEBUG", "false")
+
+    _reload_module("app.config")
+    db_module = _reload_module("app.db")
+    db_module.init_db()
+    main_module = _reload_module("app.main")
+    monkeypatch.setattr(
+        main_module, "_should_run_background_favorite_refresh", lambda: False
+    )
+
+    with TestClient(main_module.app) as client:
+        response = client.post(
+            "/bids/favorite-from-search",
+            data={
+                "q": "AI",
+                "sort": "updated_at",
+                "bid_no": "R26BK77777777",
+                "bid_seq": "000",
+                "title": "AI 기반 행정지원 플랫폼 구축",
+                "notice_org": "조달청",
+                "demand_org": "한국지능정보원",
+                "posted_at_raw": "2026-03-15 09:00",
+                "closed_at_raw": "2026-03-24 18:00",
+                "opened_at_raw": "2026-03-24 19:00",
+                "budget_amount_raw": "320000000",
+                "detail_url": "https://example.com/bids/77777777",
+                "business_type": "용역",
+                "source_api_name": "getBidPblancListInfoServc",
+                "raw_notice_version_type": "",
+                "raw_version_reason": "",
+            },
+            follow_redirects=True,
+        )
+        favorites_response = client.get("/favorites")
+
+    assert response.status_code == 200
+    assert "관심 공고 등록 완료" in response.text
+    assert favorites_response.status_code == 200
+    assert "R26BK77777777-000" in favorites_response.text
+    assert "AI 기반 행정지원 플랫폼 구축" in favorites_response.text
+
+
+def test_favorite_from_live_search_returns_json_for_fetch_clients(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "favorite-from-search-json.db"
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("BID_DATA_BACKEND", "sqlmodel")
+    monkeypatch.setenv("DEBUG", "false")
+
+    _reload_module("app.config")
+    db_module = _reload_module("app.db")
+    db_module.init_db()
+    main_module = _reload_module("app.main")
+    monkeypatch.setattr(
+        main_module, "_should_run_background_favorite_refresh", lambda: False
+    )
+
+    with TestClient(main_module.app) as client:
+        response = client.post(
+            "/bids/favorite-from-search",
+            headers={"Accept": "application/json"},
+            data={
+                "q": "AI",
+                "sort": "updated_at",
+                "bid_no": "R26BK88888888",
+                "bid_seq": "000",
+                "title": "AI 기반 분석 플랫폼 구축",
+                "notice_org": "조달청",
+                "demand_org": "한국지능정보원",
+                "posted_at_raw": "2026-03-15 09:00",
+                "closed_at_raw": "2026-03-24 18:00",
+                "opened_at_raw": "2026-03-24 19:00",
+                "budget_amount_raw": "220000000",
+                "detail_url": "https://example.com/bids/88888888",
+                "business_type": "용역",
+                "source_api_name": "getBidPblancListInfoServc",
+                "raw_notice_version_type": "",
+                "raw_version_reason": "",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["bid_id"] == "R26BK88888888-000"
+    assert "관심 공고로 저장" in payload["message"]
+
+
+def test_favorite_from_live_search_returns_job_id_when_sync_queued(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "favorite-from-search-job.db"
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
+    monkeypatch.setenv("BID_DATA_BACKEND", "sqlmodel")
+    monkeypatch.setenv("DEBUG", "false")
+
+    _reload_module("app.config")
+    db_module = _reload_module("app.db")
+    db_module.init_db()
+    main_module = _reload_module("app.main")
+    monkeypatch.setattr(
+        main_module, "_should_run_background_favorite_refresh", lambda: True
+    )
+    monkeypatch.setattr(
+        main_module, "execute_favorite_initial_refresh_job", lambda job_id, bid_id: None
+    )
+
+    with TestClient(main_module.app) as client:
+        response = client.post(
+            "/bids/favorite-from-search",
+            headers={"Accept": "application/json"},
+            data={
+                "q": "AI",
+                "sort": "updated_at",
+                "bid_no": "R26BK99999999",
+                "bid_seq": "000",
+                "title": "AI 기반 분석 플랫폼 구축 2",
+                "notice_org": "조달청",
+                "demand_org": "한국지능정보원",
+                "posted_at_raw": "2026-03-15 09:00",
+                "closed_at_raw": "2026-03-24 18:00",
+                "opened_at_raw": "2026-03-24 19:00",
+                "budget_amount_raw": "220000000",
+                "detail_url": "https://example.com/bids/99999999",
+                "business_type": "용역",
+                "source_api_name": "getBidPblancListInfoServc",
+                "raw_notice_version_type": "",
+                "raw_version_reason": "",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert isinstance(payload["job_id"], int)
+    assert payload["job_id"] > 0
 
 
 def test_favorites_refresh_action_records_operation_log(
@@ -1042,10 +1277,8 @@ def test_sqlmodel_bids_page_filters_by_org(sqlmodel_client: TestClient) -> None:
     response = sqlmodel_client.get("/bids?org=전라남도")
 
     assert response.status_code == 200
-    assert "전남소방본부 구급소모품 구매" in response.text
-    assert (
-        "2026년 중소기업 인력지원사업 종합관리시스템 유지보수 용역" not in response.text
-    )
+    assert 'value="전라남도"' in response.text
+    assert "if (shouldAutoload) runSearch()" in response.text
 
 
 def test_sqlmodel_bids_page_filters_by_closed_date_range(
@@ -1056,9 +1289,9 @@ def test_sqlmodel_bids_page_filters_by_closed_date_range(
     )
 
     assert response.status_code == 200
-    assert "R26BK00000001-000" in response.text
-    assert "R26BK00000002-000" in response.text
-    assert "R26BK00000003-000" not in response.text
+    assert 'name="closed_from" value="2026-03-18T00:00"' in response.text
+    assert 'name="closed_to" value="2026-03-20T23:59"' in response.text
+    assert "if (shouldAutoload) runSearch()" in response.text
 
 
 def test_favorites_page_hides_version_filter(sqlmodel_client: TestClient) -> None:
@@ -1091,9 +1324,9 @@ def test_sqlmodel_bids_page_can_include_historical_versions(
         response = client.get("/bids?include_versions=1")
 
     assert response.status_code == 200
-    assert ids["original_bid_id"] in response.text
-    assert ids["revision_bid_id"] in response.text
-    assert ids["cancellation_bid_id"] in response.text
+    assert (
+        "검색어 또는 기관 조건을 입력해 실시간 API 검색을 시작하세요." in response.text
+    )
 
 
 def test_operations_page_prefers_db_logs(operations_client: TestClient) -> None:

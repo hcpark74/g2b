@@ -7,6 +7,7 @@
 - 제품 정의: `docs/PRD.md`
 - `docs/api/`: 내부 API, 외부 연동 API, 동기화 전략
 - `docs/architecture/`: 시스템 구조, 코드 구조
+- 검색/관심공고 전환안: `docs/architecture/favorite-centric-search-architecture.md`
 - `docs/data/`: 데이터 모델, ER, 파싱 규칙
 - `docs/frontend/`: 화면 구조, UI 토큰, 구현 체크리스트
 - `docs/implementation/`: 실행 계획, Phase별 작업 문서, 검증 체크리스트

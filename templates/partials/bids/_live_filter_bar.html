@@ -1,0 +1,47 @@
+<div class="card app-card shadow-sm border-0">
+  <div class="card-body app-subtle rounded">
+    <form
+      id="live-bids-search-form"
+      class="row g-2"
+      action="/bids"
+      method="get"
+    >
+      <input type="hidden" name="sort" value="{{ sort_value | default('updated_at', true) }}">
+      <div class="col-12 col-md-5 col-xl-4">
+        <label class="form-label filter-label">검색어</label>
+        <input
+          class="form-control"
+          name="q"
+          placeholder="공고명, 기관명, 공고번호"
+          value="{{ search_query | default('', true) }}"
+        >
+      </div>
+      <div class="col-12 col-md-4 col-xl-3">
+        <label class="form-label filter-label">기관</label>
+        <input
+          class="form-control"
+          name="org"
+          placeholder="공고기관, 수요기관"
+          value="{{ org_filter | default('', true) }}"
+        >
+      </div>
+      <div class="col-6 col-md-3 col-xl-2">
+        <label class="form-label filter-label">마감 시작</label>
+        <input class="form-control" type="datetime-local" name="closed_from" value="{{ closed_from | default('', true) }}">
+      </div>
+      <div class="col-6 col-md-3 col-xl-2">
+        <label class="form-label filter-label">마감 종료</label>
+        <input class="form-control" type="datetime-local" name="closed_to" value="{{ closed_to | default('', true) }}">
+      </div>
+      <div class="col-12 col-md-4 col-xl-1 d-flex align-items-end">
+        <button class="btn btn-primary w-100" type="submit">검색</button>
+      </div>
+      <div class="col-12 d-flex justify-content-between align-items-center pt-1 small text-muted">
+        <span>실시간 외부 API 검색 후 관심 공고만 저장합니다.</span>
+        {% if search_query or org_filter or closed_from or closed_to %}
+          <a class="btn btn-outline-secondary btn-sm" href="/bids">초기화</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>

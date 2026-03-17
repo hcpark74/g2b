@@ -15,15 +15,348 @@
     {% include "partials/shared/_summary_cards.html" %}
   </section>
 
+  <section id="live-search-feedback" class="mb-3" {% if not action_feedback %}hidden{% endif %}>
+    {% if action_feedback %}
+      <div class="alert alert-{{ action_feedback.variant }} py-2 mb-0" role="alert">
+        <div class="fw-semibold mb-1">{{ action_feedback.title }}</div>
+        <div class="small">{{ action_feedback.message }}</div>
+        {% if action_feedback.operations_url %}
+          <a href="{{ action_feedback.operations_url }}" class="app-link small">바로가기</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </section>
+
   <section id="filter-panel" class="mb-3">
-    {% include "partials/bids/_filter_bar.html" %}
+    {% include "partials/bids/_live_filter_bar.html" %}
   </section>
 
   <section id="bid-table-container">
-    {% include "partials/bids/_bid_table.html" %}
+    {% include "partials/bids/_live_bid_table.html" %}
   </section>
 {% endblock %}
 
 {% block drawer %}
-  {% include "partials/bids/_drawer.html" %}
+  {% include "partials/bids/_live_drawer_placeholder.html" %}
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function () {
+      const form = document.getElementById("live-bids-search-form")
+      const tableContainer = document.getElementById("bid-table-container")
+      const summarySection = document.getElementById("summary-cards")
+      const feedbackSection = document.getElementById("live-search-feedback")
+      if (!form || !tableContainer || !summarySection || !feedbackSection) return
+
+      const shouldAutoload = {{ "true" if should_autoload else "false" }}
+      const syncStateByBidId = {}
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#39;")
+      }
+
+      function buildParams() {
+        const params = new URLSearchParams()
+        const formData = new FormData(form)
+        for (const [key, value] of formData.entries()) {
+          const text = String(value).trim()
+          if (text) params.set(key, text)
+        }
+        return params
+      }
+
+      function showFeedback(variant, title, message, linkUrl, linkLabel) {
+        feedbackSection.hidden = false
+        feedbackSection.innerHTML = `
+          <div class="alert alert-${escapeHtml(variant)} py-2 mb-0" role="alert">
+            <div class="fw-semibold mb-1">${escapeHtml(title)}</div>
+            <div class="small">${escapeHtml(message)}</div>
+            ${linkUrl ? `<a href="${escapeHtml(linkUrl)}" class="app-link small">${escapeHtml(linkLabel || "바로가기")}</a>` : ""}
+          </div>
+        `
+      }
+
+      function clearFeedback() {
+        feedbackSection.hidden = true
+        feedbackSection.innerHTML = ""
+      }
+
+      let pollingTimer = null
+
+      function stopPolling() {
+        if (pollingTimer) {
+          window.clearTimeout(pollingTimer)
+          pollingTimer = null
+        }
+      }
+
+      function renderJobSteps(metadata) {
+        const steps = Array.isArray(metadata?.steps) ? metadata.steps : []
+        if (!steps.length) return ""
+        return `<div class="mt-2 small">${steps.map((step) => `${escapeHtml(step.name)}: ${escapeHtml(step.status)}`).join(" | ")}</div>`
+      }
+
+      function syncBadgeMarkup(bidId) {
+        const state = syncStateByBidId[bidId]
+        if (!state) return '<span class="badge text-bg-light border text-secondary">미추적</span>'
+        const steps = Array.isArray(state.metadata?.steps) ? state.metadata.steps : []
+        const detailStep = steps.find((step) => step.name === 'detail_enrichment')
+        const contractStep = steps.find((step) => step.name === 'contract_process')
+        const detailCount = Number(detailStep?.fetched_item_count || 0)
+        const contractCount = Number(contractStep?.fetched_item_count || 0)
+        const countSummary =
+          state.status === 'completed'
+            ? `<div class="small text-secondary mt-1">detail ${detailCount} / contract ${contractCount}</div>`
+            : ''
+        const errorSummary =
+          state.status === 'failed' && state.metadata?.error_reason
+            ? `<div class="small text-danger mt-1">${escapeHtml(state.metadata.error_reason)}</div>`
+            : ''
+        if (state.status === 'queued') {
+          return '<span class="badge text-bg-info">동기화 대기</span>'
+        }
+        if (state.status === 'running') {
+          return '<span class="badge text-bg-primary">동기화 중</span>'
+        }
+        if (state.status === 'completed') {
+          return `<span class="badge text-bg-success">동기화 완료</span>${countSummary}`
+        }
+        if (state.status === 'failed') {
+          return `<span class="badge text-bg-danger">동기화 실패</span>${errorSummary}`
+        }
+        return `<span class="badge text-bg-light border text-secondary">${escapeHtml(state.status)}</span>${countSummary}`
+      }
+
+      async function pollJobStatus(jobId) {
+        stopPolling()
+        async function tick() {
+          try {
+            const response = await fetch(`/api/v1/jobs/${jobId}`, { headers: { Accept: 'application/json' } })
+            if (!response.ok) throw new Error(`HTTP ${response.status}`)
+            const payload = await response.json()
+            const job = payload.data
+            syncStateByBidId[job.target] = {
+              status: job.status,
+              message: job.message,
+              metadata: job.metadata || {},
+            }
+            const stepSummary = renderJobSteps(job.metadata)
+            feedbackSection.hidden = false
+            feedbackSection.innerHTML = `
+              <div class="alert alert-${job.status === 'failed' ? 'danger' : job.status === 'completed' ? 'success' : 'info'} py-2 mb-0" role="alert">
+                <div class="fw-semibold mb-1">관심 공고 동기화 ${escapeHtml(job.status)}</div>
+                <div class="small">${escapeHtml(job.message)}</div>
+                ${stepSummary}
+                <a href="/operations" class="app-link small">작업 이력 보기</a>
+              </div>
+            `
+            if (job.status === 'queued' || job.status === 'running') {
+              await runSearch()
+              pollingTimer = window.setTimeout(tick, 1500)
+            } else {
+              await runSearch()
+            }
+          } catch (error) {
+            showFeedback('danger', '동기화 상태 확인 실패', error.message, '/operations', '작업 이력 보기')
+          }
+        }
+        tick()
+      }
+
+      function updateUrl(params) {
+        const url = params.toString() ? `/bids?${params.toString()}` : "/bids"
+        window.history.replaceState({}, "", url)
+      }
+
+      function renderSummary(meta, items) {
+        const favoriteCount = items.filter((item) => item.favorite).length
+        const externalCount = items.filter((item) => item.detail_url).length
+        summarySection.innerHTML = `
+          <div class="row g-3">
+            <div class="col-12 col-sm-6 col-xl-3"><div class="card app-card shadow-sm h-100"><div class="card-body"><div class="soft-label mb-1">검색 결과</div><div class="summary-value">${meta.total}</div></div></div></div>
+            <div class="col-12 col-sm-6 col-xl-3"><div class="card app-card shadow-sm h-100"><div class="card-body"><div class="soft-label mb-1">이미 저장됨</div><div class="summary-value">${favoriteCount}</div></div></div></div>
+            <div class="col-12 col-sm-6 col-xl-3"><div class="card app-card shadow-sm h-100"><div class="card-body"><div class="soft-label mb-1">원문 링크</div><div class="summary-value">${externalCount}</div></div></div></div>
+            <div class="col-12 col-sm-6 col-xl-3"><div class="card app-card shadow-sm h-100"><div class="card-body"><div class="soft-label mb-1">조회 방식</div><div class="summary-value">외부 API</div></div></div></div>
+          </div>
+        `
+      }
+
+      function renderEmpty(message) {
+        tableContainer.innerHTML = `
+          <div class="d-flex flex-column gap-2">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 app-surface rounded shadow-sm p-2 border sticky-toolbar">
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="section-title">실시간 검색 결과</span>
+                <span class="toolbar-chip">현재 조건 결과 0건</span>
+              </div>
+            </div>
+            <div class="app-surface rounded shadow-sm p-2 border">
+              <div class="text-center text-secondary py-4">${escapeHtml(message)}</div>
+            </div>
+          </div>
+        `
+      }
+
+      function hiddenInput(name, value) {
+        return `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`
+      }
+
+      function renderTable(payload) {
+        const items = payload.data.items
+        renderSummary(payload.meta, items)
+        if (!items.length) {
+          renderEmpty("조건에 맞는 공고가 없습니다. 검색 조건이나 기간을 조정해보세요.")
+          return
+        }
+
+        const currentParams = buildParams()
+        const sortValue = currentParams.get("sort") || "updated_at"
+        const rows = items.map((bid, index) => {
+          const favoriteCell = bid.favorite
+            ? '<span class="badge text-bg-warning">관심 공고</span>'
+            : `
+              <form method="post" action="/bids/favorite-from-search" class="d-inline live-favorite-form">
+                ${hiddenInput("q", currentParams.get("q") || "")}
+                ${hiddenInput("org", currentParams.get("org") || "")}
+                ${hiddenInput("closed_from", currentParams.get("closed_from") || "")}
+                ${hiddenInput("closed_to", currentParams.get("closed_to") || "")}
+                ${hiddenInput("sort", sortValue)}
+                ${hiddenInput("bid_no", bid.bid_no)}
+                ${hiddenInput("bid_seq", bid.bid_seq)}
+                ${hiddenInput("title", bid.title)}
+                ${hiddenInput("notice_org", bid.notice_org || "")}
+                ${hiddenInput("demand_org", bid.demand_org || "")}
+                ${hiddenInput("posted_at_raw", bid.posted_at || "")}
+                ${hiddenInput("closed_at_raw", bid.closed_at || "")}
+                ${hiddenInput("opened_at_raw", bid.opened_at || "")}
+                ${hiddenInput("budget_amount_raw", (bid.budget_amount || "").replace(/,/g, ""))}
+                ${hiddenInput("detail_url", bid.detail_url || "")}
+                ${hiddenInput("business_type", bid.business_type || "")}
+                ${hiddenInput("source_api_name", bid.source_api_name || "")}
+                ${hiddenInput("raw_notice_version_type", "")}
+                ${hiddenInput("raw_version_reason", "")}
+                <button class="btn btn-sm btn-outline-warning" type="submit">관심 등록</button>
+              </form>`
+          const syncCell = syncBadgeMarkup(bid.bid_id)
+          const detailButton = bid.detail_url
+            ? `<a class="btn btn-sm btn-outline-secondary" href="${escapeHtml(bid.detail_url)}" target="_blank" rel="noreferrer">원문</a>`
+            : '<span class="small text-secondary">-</span>'
+          return `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${favoriteCell}</td>
+              <td>${syncCell}</td>
+              <td>${escapeHtml(bid.business_type || "-")}</td>
+              <td>${escapeHtml(bid.display_bid_no)}</td>
+              <td><div class="fw-semibold">${escapeHtml(bid.title)}</div></td>
+              <td>${escapeHtml(bid.notice_org || "-")}</td>
+              <td>${escapeHtml(bid.demand_org || "-")}</td>
+              <td>${escapeHtml(bid.posted_at || "-")}</td>
+              <td>${escapeHtml(bid.closed_at || "-")}</td>
+              <td>${escapeHtml(bid.budget_amount || "-")}</td>
+              <td><span class="small text-secondary">${escapeHtml(bid.source_api_name || "-")}</span></td>
+              <td class="text-end">${detailButton}</td>
+            </tr>
+          `
+        }).join("")
+
+        tableContainer.innerHTML = `
+          <div class="d-flex flex-column gap-2">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 app-surface rounded shadow-sm p-2 border sticky-toolbar">
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="section-title">실시간 검색 결과</span>
+                <span class="toolbar-chip">현재 조건 결과 ${payload.meta.total}건</span>
+              </div>
+              <div class="small text-secondary">정렬: ${escapeHtml(payload.meta.sort)}</div>
+            </div>
+            <div class="app-surface rounded shadow-sm p-2 border">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0 app-table">
+                  <thead>
+                    <tr>
+                      <th>No</th><th>저장</th><th>동기화</th><th>업무</th><th>공고번호</th><th>공고명</th><th>공고기관</th><th>수요기관</th><th>게시일</th><th>마감일</th><th>예산</th><th>출처</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        `
+      }
+
+      async function runSearch(event) {
+        if (event) event.preventDefault()
+        const params = buildParams()
+        updateUrl(params)
+        if (![params.get("q"), params.get("org"), params.get("closed_from"), params.get("closed_to")].some(Boolean)) {
+          clearFeedback()
+          renderSummary({ total: 0 }, [])
+          renderEmpty("검색어 또는 기관 조건을 입력해 실시간 API 검색을 시작하세요.")
+          return
+        }
+        tableContainer.innerHTML = '<div class="app-surface rounded shadow-sm p-3 border text-secondary">실시간 검색 중...</div>'
+        try {
+          const response = await fetch(`/api/v1/search/bids?${params.toString()}`, { headers: { Accept: 'application/json' } })
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+          const payload = await response.json()
+          renderTable(payload)
+        } catch (error) {
+          renderSummary({ total: 0 }, [])
+          renderEmpty(`실시간 검색 실패: ${error.message}`)
+        }
+      }
+
+      async function submitFavorite(formElement) {
+        const submitButton = formElement.querySelector('button[type="submit"]')
+        if (submitButton) {
+          submitButton.disabled = true
+          submitButton.textContent = "저장 중..."
+        }
+        try {
+          const bidId = formElement.querySelector('input[name="bid_no"]')?.value
+          const bidSeq = formElement.querySelector('input[name="bid_seq"]')?.value || '000'
+          const bidIdValue = bidId ? `${bidId}-${String(bidSeq).padStart(3, '0')}` : null
+          if (bidIdValue) {
+            syncStateByBidId[bidIdValue] = { status: 'queued', message: 'favorite bid initial refresh queued', metadata: {} }
+          }
+          const response = await fetch(formElement.action, {
+            method: 'POST',
+            headers: { Accept: 'application/json' },
+            body: new FormData(formElement),
+          })
+          const payload = await response.json()
+          if (!response.ok || !payload.success) {
+            throw new Error(payload.message || `HTTP ${response.status}`)
+          }
+          showFeedback('success', '관심 공고 등록 완료', payload.message, payload.favorites_url, '관심 공고 보기')
+          await runSearch()
+          if (payload.job_id) {
+            pollJobStatus(payload.job_id)
+          }
+        } catch (error) {
+          showFeedback('danger', '관심 공고 등록 실패', error.message, '/operations', '작업 이력 보기')
+          if (submitButton) {
+            submitButton.disabled = false
+            submitButton.textContent = '관심 등록'
+          }
+        }
+      }
+
+      form.addEventListener("submit", runSearch)
+      tableContainer.addEventListener("submit", function (event) {
+        const favoriteForm = event.target.closest("form.live-favorite-form")
+        if (!favoriteForm) return
+        event.preventDefault()
+        submitFavorite(favoriteForm)
+      })
+      if (shouldAutoload) runSearch()
+    })()
+  </script>
 {% endblock %}

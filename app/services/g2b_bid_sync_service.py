@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 from app.clients import G2BBidPublicInfoClient
 from app.models import (
     BID_STATUS_COLLECTED,
+    BID_STATUS_FAVORITE,
     Bid,
     BidDetail,
     build_bid_id,
@@ -123,6 +124,30 @@ class G2BBidPublicInfoSyncService:
             upserted_count=upserted_count,
             bid_ids=bid_ids,
         )
+
+    def upsert_bid_item(
+        self,
+        *,
+        item: dict[str, Any],
+        operation_name: str,
+        favorite: bool = False,
+    ) -> str:
+        bid_id = self._upsert_bid(item, operation_name)
+        if bid_id is None:
+            raise ValueError("Unable to build bid_id from search item")
+
+        bid = self.session.get(Bid, bid_id)
+        if bid is None:
+            raise ValueError(f"Bid not found after upsert: {bid_id}")
+
+        if favorite:
+            bid.is_favorite = True
+            if bid.status in {"", BID_STATUS_COLLECTED}:
+                bid.status = BID_STATUS_FAVORITE
+            self.session.add(bid)
+
+        self.session.commit()
+        return bid_id
 
     def _upsert_bid(self, item: dict[str, Any], operation_name: str) -> str | None:
         bid_id = self._build_bid_id(item)
